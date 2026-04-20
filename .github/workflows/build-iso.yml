@@ -307,26 +307,30 @@ jobs:
       - name: Build ISO
         id: build_iso
         run: |
-          echo "Starting lb build..."
-          df -h /
+          echo "=== lb version ==="
+          lb --version
 
-          # lb build must run as root from the repo directory
-          # Use sudo -E to preserve environment variables
-          sudo -E bash auto/build 2>&1 | sudo tee build-full.log || {
-            EXIT_CODE=$?
-            echo "====== BUILD FAILED (exit ${EXIT_CODE}) ======"
-            echo "====== FULL BUILD LOG ======"
-            sudo cat build-full.log
-            echo "====== CHROOT LOG ======"
-            sudo cat chroot/build.log 2>/dev/null || true
-            echo "====== LS ROOT ======"
-            ls -la
-            exit ${EXIT_CODE}
-          }
+          echo "=== config/ contents ==="
+          find config/ -type f | sort
 
-          df -h /
+          echo "=== Starting lb build ==="
+          sudo -E lb build noauto 2>&1 | sudo tee build-full.log
+          BUILD_EXIT=${PIPESTATUS[0]}
 
-      # ── Find and rename ISO ──────────────────────────────────────────────────
+          echo "=== build-full.log ==="
+          sudo cat build-full.log
+
+          echo "=== chroot/build.log ==="
+          sudo cat chroot/build.log 2>/dev/null || echo "(no chroot build log)"
+
+          echo "=== Directory listing ==="
+          ls -la
+
+          if [ $BUILD_EXIT -ne 0 ]; then
+            echo "BUILD FAILED with exit code $BUILD_EXIT"
+            exit $BUILD_EXIT
+          fi
+
       - name: Locate and rename ISO
         id: locate_iso
         run: |
