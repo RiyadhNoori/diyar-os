@@ -207,31 +207,46 @@ jobs:
       - name: Install live-build and dependencies
         run: |
           sudo apt-get update -qq
+
+          # Install debian-archive-keyring so apt trusts Debian repos
           sudo apt-get install -y --no-install-recommends \
-            live-build \
+            debian-archive-keyring ca-certificates
+
+          # Add Debian Bookworm repo for the correct live-build version
+          echo "deb http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware" \
+            | sudo tee /etc/apt/sources.list.d/debian-bookworm.list
+
+          # Pin live-build to come from Debian (priority 1001 overrides Ubuntu)
+          printf 'Package: live-build\nPin: release o=Debian,n=bookworm\nPin-Priority: 1001\n' \
+            | sudo tee /etc/apt/preferences.d/live-build
+
+          sudo apt-get update -qq
+
+          # Install live-build from Debian Bookworm
+          sudo apt-get install -y --no-install-recommends -t bookworm live-build
+
+          # Install remaining build dependencies
+          sudo apt-get install -y --no-install-recommends \
             debootstrap \
             squashfs-tools \
             xorriso \
             grub-pc-bin \
             grub-efi-amd64-bin \
-            grub-efi-amd64-signed \
             mtools \
             isolinux \
             syslinux-common \
-            syslinux-efi \
             rsync \
             parted \
             dosfstools \
             e2fsprogs \
-            python3-pip \
             python3-pil \
             librsvg2-bin \
-            curl \
             wget \
             git \
-            qemu-utils \
             ovmf
+
           echo "live-build version: $(lb --version)"
+          echo "debootstrap version: $(debootstrap --version | head -1)"
 
       # ── Configure live-build ─────────────────────────────────────────────────
       - name: Configure live-build
