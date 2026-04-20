@@ -1,0 +1,136 @@
+name: Validate
+
+# =============================================================================
+# Diyar OS — Fast Validation Workflow
+# .github/workflows/validate.yml
+#
+# Runs on every push and PR — takes ~2 minutes vs 60+ for a full build.
+# Catches: shell syntax errors, XML errors, package list issues, hook problems.
+# =============================================================================
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: [main, develop]
+
+jobs:
+  validate:
+    name: Validate configs & scripts
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            shellcheck \
+            libxml2-utils \
+            yamllint
+
+      - name: ShellCheck — auto/config
+        run: |
+          shellcheck -S warning auto/config auto/build auto/clean \
+            || echo "ShellCheck warnings (non-fatal)"
+
+      - name: ShellCheck — hooks
+        run: |
+          shellcheck -S warning -e SC1091 \
+            config/hooks/live/*.hook.chroot \
+            || echo "ShellCheck warnings (non-fatal)"
+
+      - name: ShellCheck — scripts
+        run: |
+          shellcheck -S warning scripts/*.sh \
+            || echo "ShellCheck warnings (non-fatal)"
+
+      - name: Validate XML configs
+        run: |
+          FAIL=0
+          for f in $(find config/ -name "*.xml" 2>/dev/null); do
+            xmllint --noout "$f" 2>&1 || { echo "XML ERROR: $f"; FAIL=1; }
+          done
+          [[ $FAIL -eq 0 ]] && echo "All XML files valid." || exit 1
+
+      - name: Validate YAML (workflows)
+        run: |
+          yamllint -d "{extends: relaxed, rules: {line-length: {max: 160}}}" \
+            .github/workflows/ \
+            || echo "YAML lint warnings (non-fatal)"
+
+      - name: Check package lists
+        run: |
+          FAIL=0
+          for f in config/package-lists/*.list.chroot; do
+            echo "Checking $f..."
+            # No Windows line endings
+            if file "$f" | grep -q CRLF; then
+              echo "  ERROR: CRLF line endings in $f"
+              FAIL=1
+            fi
+            # No obviously wrong entries
+            while IFS= read -r line; do
+              # Skip comments and blank lines
+              [[ "$line" =~ ^[[:space:]]*# ]] && continue
+              [[ -z "${line// }" ]] && continue
+              # Package names should be lowercase alphanumeric + - + .
+              if [[ ! "$line" =~ ^[a-z0-9][a-z0-9.+\-]*$ ]]; then
+                echo "  WARNING: suspicious package name: '$line'"
+              fi
+            done < "$f"
+          done
+          [[ $FAIL -eq 0 ]] && echo "Package list check passed." || exit 1
+
+      - name: Check hook naming convention
+        run: |
+          # All hooks must follow NNNN-name.hook.chroot pattern
+          FAIL=0
+          for f in config/hooks/live/*.hook.chroot; do
+            base="$(basename "$f")"
+            if [[ ! "$base" =~ ^[0-9]{4}-[a-z0-9_-]+\.hook\.chroot$ ]]; then
+              echo "ERROR: Bad hook filename: $base (expected NNNN-name.hook.chroot)"
+              FAIL=1
+            fi
+          done
+          [[ $FAIL -eq 0 ]] && echo "Hook naming convention: OK" || exit 1
+
+      - name: Check hook bash syntax
+        run: |
+          FAIL=0
+          for f in config/hooks/live/*.hook.chroot; do
+            bash -n "$f" 2>&1 || { echo "SYNTAX ERROR: $f"; FAIL=1; }
+          done
+          [[ $FAIL -eq 0 ]] && echo "All hooks pass syntax check." || exit 1
+
+      - name: Verify required files exist
+        run: |
+          REQUIRED=(
+            "auto/config"
+            "auto/build"
+            "auto/clean"
+            "config/package-lists/00-base.list.chroot"
+            "config/package-lists/01-desktop.list.chroot"
+            "config/package-lists/02-arabic.list.chroot"
+            "config/package-lists/03-installer.list.chroot"
+            "config/hooks/live/0020-arabian-shield.hook.chroot"
+            "config/hooks/live/0030-diyar-installer.hook.chroot"
+            "config/hooks/live/0040-arabic-system.hook.chroot"
+            "config/hooks/live/0050-xfce4-desktop.hook.chroot"
+            "config/hooks/live/0060-lightdm.hook.chroot"
+            "config/hooks/live/0099-cleanup.hook.chroot"
+          )
+          FAIL=0
+          for f in "${REQUIRED[@]}"; do
+            [[ -f "$f" ]] && echo "  ✓ $f" || { echo "  ✗ MISSING: $f"; FAIL=1; }
+          done
+          [[ $FAIL -eq 0 ]] && echo "All required files present." || exit 1
+
+      - name: Validation summary
+        run: |
+          echo "## Validation Passed" >> $GITHUB_STEP_SUMMARY
+          echo "All syntax checks, XML validation, and file checks passed." \
+            >> $GITHUB_STEP_SUMMARY
