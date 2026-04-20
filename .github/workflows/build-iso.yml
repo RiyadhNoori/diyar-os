@@ -208,24 +208,29 @@ jobs:
         run: |
           sudo apt-get update -qq
 
-          # Install debian-archive-keyring so apt trusts Debian repos
-          sudo apt-get install -y --no-install-recommends \
-            debian-archive-keyring ca-certificates
+          # ── Import Debian Bookworm GPG keys via curl (most reliable on Actions)
+          sudo mkdir -p /etc/apt/keyrings
+          curl -fsSL "https://ftp-master.debian.org/keys/archive-key-12.asc" \
+            | sudo gpg --dearmor -o /etc/apt/keyrings/debian-bookworm.gpg
+          curl -fsSL "https://ftp-master.debian.org/keys/archive-key-12-security.asc" \
+            | sudo gpg --dearmor -o /etc/apt/keyrings/debian-bookworm-security.gpg
 
-          # Add Debian Bookworm repo for the correct live-build version
-          echo "deb http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware" \
+          # ── Add Debian Bookworm repo with signed-by reference
+          echo "deb [signed-by=/etc/apt/keyrings/debian-bookworm.gpg] http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware" \
             | sudo tee /etc/apt/sources.list.d/debian-bookworm.list
+          echo "deb [signed-by=/etc/apt/keyrings/debian-bookworm-security.gpg] http://security.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware" \
+            | sudo tee /etc/apt/sources.list.d/debian-bookworm-security.list
 
-          # Pin live-build to come from Debian (priority 1001 overrides Ubuntu)
+          # ── Pin live-build from Debian (priority 1001 overrides Ubuntu)
           printf 'Package: live-build\nPin: release o=Debian,n=bookworm\nPin-Priority: 1001\n' \
             | sudo tee /etc/apt/preferences.d/live-build
 
           sudo apt-get update -qq
 
-          # Install live-build from Debian Bookworm
+          # ── Install live-build from Debian Bookworm
           sudo apt-get install -y --no-install-recommends -t bookworm live-build
 
-          # Install remaining build dependencies
+          # ── Install remaining build dependencies
           sudo apt-get install -y --no-install-recommends \
             debootstrap \
             squashfs-tools \
