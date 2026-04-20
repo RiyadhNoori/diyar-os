@@ -208,29 +208,39 @@ jobs:
         run: |
           sudo apt-get update -qq
 
-          # ── Import Debian Bookworm GPG keys via curl (most reliable on Actions)
+          # ── Import Debian Bookworm GPG keys via curl
           sudo mkdir -p /etc/apt/keyrings
           curl -fsSL "https://ftp-master.debian.org/keys/archive-key-12.asc" \
             | sudo gpg --dearmor -o /etc/apt/keyrings/debian-bookworm.gpg
           curl -fsSL "https://ftp-master.debian.org/keys/archive-key-12-security.asc" \
             | sudo gpg --dearmor -o /etc/apt/keyrings/debian-bookworm-security.gpg
 
-          # ── Add Debian Bookworm repo with signed-by reference
+          # ── Add Debian Bookworm repo
           echo "deb [signed-by=/etc/apt/keyrings/debian-bookworm.gpg] http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware" \
             | sudo tee /etc/apt/sources.list.d/debian-bookworm.list
           echo "deb [signed-by=/etc/apt/keyrings/debian-bookworm-security.gpg] http://security.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware" \
             | sudo tee /etc/apt/sources.list.d/debian-bookworm-security.list
 
-          # ── Pin live-build from Debian (priority 1001 overrides Ubuntu)
-          printf 'Package: live-build\nPin: release o=Debian,n=bookworm\nPin-Priority: 1001\n' \
-            | sudo tee /etc/apt/preferences.d/live-build
+          # ── Pin live-build and debian-archive-keyring from Debian
+          cat <<'PINEOF' | sudo tee /etc/apt/preferences.d/debian-bookworm
+          Package: live-build
+          Pin: release o=Debian,n=bookworm
+          Pin-Priority: 1001
+
+          Package: debian-archive-keyring
+          Pin: release o=Debian,n=bookworm
+          Pin-Priority: 1001
+          PINEOF
 
           sudo apt-get update -qq
 
-          # ── Install live-build from Debian Bookworm
-          sudo apt-get install -y --no-install-recommends -t bookworm live-build
+          # ── Install live-build AND debian-archive-keyring from Debian
+          # debian-archive-keyring installs the keyring debootstrap needs at
+          # /usr/share/keyrings/debian-archive-keyring.gpg
+          sudo apt-get install -y --no-install-recommends \
+            -t bookworm live-build debian-archive-keyring
 
-          # ── Install remaining build dependencies
+          # ── Install remaining build tools
           sudo apt-get install -y --no-install-recommends \
             debootstrap \
             squashfs-tools \
@@ -250,11 +260,13 @@ jobs:
             git \
             ovmf
 
+          # ── Verify the keyring file exists
+          echo "--- Checking keyring ---"
+          ls -la /usr/share/keyrings/debian-archive-keyring.gpg             && echo "Keyring OK"             || echo "KEYRING MISSING"
+
           echo "live-build version: $(lb --version)"
           echo "debootstrap version: $(debootstrap --version | head -1)"
 
-      # ── Configure live-build ─────────────────────────────────────────────────
-      # ── Configure live-build ─────────────────────────────────────────────────
       - name: Configure live-build
         run: |
           echo "Running lb config..."
