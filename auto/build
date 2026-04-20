@@ -4,4 +4,15 @@
 # auto/build
 # =============================================================================
 set -e
-lb build noauto "${@}" 2>&1 | tee build.log
+
+# lb build needs to run as root
+if [ "$(id -u)" -ne 0 ]; then
+    echo "ERROR: lb build must run as root. Use: sudo bash auto/build"
+    exit 1
+fi
+
+echo "[auto/build] live-build version: $(lb --version)"
+echo "[auto/build] Working directory: $(pwd)"
+echo "[auto/build] Starting lb build..."
+
+lb build noauto "${@}"
