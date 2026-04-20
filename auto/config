@@ -3,8 +3,16 @@
 # Diyar OS — live-build master configuration
 # auto/config
 #
-# Run: lb config
-# This script is called by `lb config` to set all build parameters.
+# Uses only options valid across all live-build versions.
+# Options removed (not supported on Ubuntu runner's live-build):
+#   --bootappend-live-failsafe  -> moved to includes.chroot
+#   --debootstrap-options       -> set via env variable in workflow
+#   --bootloaders               -> handled by grub packages in package list
+#   --uefi-secure-boot          -> not needed
+#   --hostname / --username     -> moved into --bootappend-live
+#   --debian-installer          -> not needed, we use our own installer
+#   --win32-loader              -> not needed
+#   --hdd-label                 -> only valid for hdd image type
 # =============================================================================
 
 set -e
@@ -12,42 +20,22 @@ set -e
 lb config noauto \
     --architectures          amd64 \
     --distribution           bookworm \
-    --debian-installer       none \
     --archive-areas          "main contrib non-free non-free-firmware" \
-    \
     --binary-images          iso-hybrid \
     --iso-application        "Diyar OS" \
     --iso-publisher          "Diyar OS Project" \
     --iso-volume             "DIYAR_OS_1_0" \
-    \
-    --bootappend-live        "boot=live components quiet splash locales=ar_IQ.UTF-8 keyboard-layouts=ara,us timezone=Asia/Baghdad" \
-    --bootappend-live-failsafe "boot=live components memtest noapic noapm nodma nomce nolapic nosmp nosplash vga=normal" \
-    \
+    --bootappend-live        "boot=live components quiet splash locales=ar_IQ.UTF-8 keyboard-layouts=ara,us timezone=Asia/Baghdad hostname=diyar-live username=diyar" \
     --linux-packages         "linux-image linux-headers" \
     --linux-flavours         amd64 \
-    \
     --mirror-bootstrap       "https://deb.debian.org/debian/" \
     --mirror-chroot          "https://deb.debian.org/debian/" \
     --mirror-binary          "https://deb.debian.org/debian/" \
     --mirror-chroot-security "https://security.debian.org/debian-security/" \
     --mirror-binary-security "https://security.debian.org/debian-security/" \
-    \
     --apt                    apt \
     --apt-options            "--yes --no-install-recommends" \
     --apt-recommends         false \
-    \
     --compression            xz \
-    --debootstrap-options    "--include=ca-certificates" \
-    \
-    --bootloaders            "grub-efi,syslinux" \
-    --uefi-secure-boot       disable \
-    \
     --chroot-filesystem      squashfs \
-    --hdd-label              "DIYAR_OS" \
-    \
-    --hostname               "diyar-live" \
-    --username               "diyar" \
-    \
-    --win32-loader           false \
-    \
     "${@}"
