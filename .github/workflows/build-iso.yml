@@ -254,13 +254,18 @@ jobs:
           echo "debootstrap version: $(debootstrap --version | head -1)"
 
       # ── Configure live-build ─────────────────────────────────────────────────
+      # ── Configure live-build ─────────────────────────────────────────────────
       - name: Configure live-build
         run: |
           echo "Running lb config..."
           sudo bash auto/config
           echo "Configuration complete."
-          # Show what was generated
-          ls -la config/
+          echo "=== config/ tree ==="
+          find config/ -type f | sort
+          echo "=== config/common ==="
+          sudo cat config/common 2>/dev/null || true
+          echo "=== lb --version ==="
+          lb --version
 
       # ── Inject version into ISO ──────────────────────────────────────────────
       - name: Inject version metadata
@@ -303,19 +308,22 @@ jobs:
         id: build_iso
         run: |
           echo "Starting lb build..."
-          echo "Disk space before build:"
           df -h /
 
-          # Build with full logging
-          sudo bash auto/build 2>&1 | tee build-full.log || {
+          # lb build must run as root from the repo directory
+          # Use sudo -E to preserve environment variables
+          sudo -E bash auto/build 2>&1 | sudo tee build-full.log || {
             EXIT_CODE=$?
-            echo "BUILD FAILED with exit code ${EXIT_CODE}"
-            echo "Last 100 lines of build log:"
-            tail -100 build-full.log
+            echo "====== BUILD FAILED (exit ${EXIT_CODE}) ======"
+            echo "====== FULL BUILD LOG ======"
+            sudo cat build-full.log
+            echo "====== CHROOT LOG ======"
+            sudo cat chroot/build.log 2>/dev/null || true
+            echo "====== LS ROOT ======"
+            ls -la
             exit ${EXIT_CODE}
           }
 
-          echo "Disk space after build:"
           df -h /
 
       # ── Find and rename ISO ──────────────────────────────────────────────────
