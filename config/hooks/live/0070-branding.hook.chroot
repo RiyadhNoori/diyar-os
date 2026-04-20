@@ -1,0 +1,48 @@
+#!/bin/bash
+# =============================================================================
+# Diyar OS — Live Hook: Install Branding
+# (Add to diyar-os/config/hooks/live/0070-branding.hook.chroot)
+# =============================================================================
+set -e
+
+BRANDING_REPO="https://github.com/RiyadhNoori/diyar-branding"
+BRANDING_DIR="/opt/diyar-branding"
+
+echo "[DIYAR] Installing Diyar OS branding..."
+
+# Install conversion deps
+DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    librsvg2-bin \
+    python3-pil \
+    imagemagick \
+    plymouth \
+    plymouth-themes 2>/dev/null || true
+
+# Clone or use bundled
+if git clone --depth=1 "$BRANDING_REPO" "$BRANDING_DIR" 2>/dev/null; then
+    echo "[DIYAR] Cloned diyar-branding."
+elif [[ -d "$BRANDING_DIR" ]]; then
+    echo "[DIYAR] Using bundled branding."
+else
+    echo "[DIYAR] WARNING: Branding not available — using defaults."
+    exit 0
+fi
+
+# Run installer
+bash "${BRANDING_DIR}/scripts/install-branding.sh"
+
+# Update XFCE4 skel to use Diyar theme
+SKEL_XFCE="/etc/skel/.config/xfce4/xfconf/xfce-perchannel-xml"
+
+# Patch xsettings to use our theme
+if [[ -f "${SKEL_XFCE}/xsettings.xml" ]]; then
+    sed -i 's/Arc-Dark/Diyar/g; s/Papirus-Dark/Diyar/g' \
+        "${SKEL_XFCE}/xsettings.xml"
+fi
+# Patch gtk3 settings.ini
+if [[ -f "/etc/skel/.config/gtk-3.0/settings.ini" ]]; then
+    sed -i 's/Arc-Dark/Diyar/g; s/Papirus-Dark/Diyar/g' \
+        "/etc/skel/.config/gtk-3.0/settings.ini"
+fi
+
+echo "[DIYAR] Branding installation complete."

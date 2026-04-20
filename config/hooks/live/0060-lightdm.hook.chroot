@@ -1,0 +1,52 @@
+#!/bin/bash
+# =============================================================================
+# Diyar OS — Live Hook: LightDM + Live User
+# config/hooks/live/0060-lightdm.hook.chroot
+# =============================================================================
+set -e
+
+echo "[DIYAR] Configuring LightDM..."
+
+mkdir -p /etc/lightdm/lightdm-gtk-greeter.conf.d \
+         /etc/lightdm/lightdm.conf.d
+
+# Live session: autologin as 'diyar' user
+cat > /etc/lightdm/lightdm.conf.d/10-diyar-live.conf <<'EOF'
+[Seat:*]
+greeter-session=lightdm-gtk-greeter
+user-session=xfce
+autologin-user=diyar
+autologin-user-timeout=0
+EOF
+
+# Greeter appearance — sharp, dark, Arabic font
+cat > /etc/lightdm/lightdm-gtk-greeter.conf <<'EOF'
+[greeter]
+background=#161B28
+theme-name=Arc-Dark
+icon-theme-name=Papirus-Dark
+font-name=Vazirmatn 11
+xft-antialias=true
+xft-hintstyle=slight
+xft-rgba=rgb
+indicators=~host;~spacer;~clock;~spacer;~session;~language;~a11y;~power
+clock-format=%H:%M  —  %A %d %B %Y
+position=50%,center 50%,center
+user-background=false
+hide-user-image=true
+panel-position=bottom
+EOF
+
+# Live user profile
+cat >> /etc/skel/.profile <<'PROFILE'
+
+# Diyar OS Arabic environment
+export LANG="ar_IQ.UTF-8"
+export LC_MESSAGES="en_US.UTF-8"
+export LC_TIME="ar_IQ.UTF-8"
+export GTK_IM_MODULE=ibus
+export QT_IM_MODULE=ibus
+export XMODIFIERS=@im=ibus
+PROFILE
+
+echo "[DIYAR] LightDM configured."

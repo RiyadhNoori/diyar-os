@@ -1,0 +1,36 @@
+#!/bin/bash
+# =============================================================================
+# Diyar OS — Live Hook: Install Diyar Installer
+# config/hooks/live/0030-diyar-installer.hook.chroot
+# =============================================================================
+set -e
+
+INSTALLER_REPO="https://github.com/RiyadhNoori/diyar-installer"
+INSTALLER_DEST="/opt/diyar-installer"
+
+echo "[DIYAR] Installing diyar-installer..."
+
+# Try cloning from GitHub; if offline, use the copy already included
+# in config/includes.chroot/opt/diyar-installer (see includes dir)
+if git clone --depth=1 "$INSTALLER_REPO" "$INSTALLER_DEST" 2>/dev/null; then
+    echo "[DIYAR] Cloned diyar-installer from GitHub."
+elif [[ -d "/opt/diyar-installer" ]]; then
+    echo "[DIYAR] Using bundled diyar-installer (no network)."
+else
+    echo "[DIYAR] ERROR: diyar-installer not available." >&2
+    exit 1
+fi
+
+cd "$INSTALLER_DEST"
+make install PREFIX=/usr/local
+
+# Desktop launcher on live session
+install -Dm644 diyar-install.desktop \
+    /usr/share/applications/diyar-install.desktop
+
+# Also put shortcut on default desktop
+mkdir -p /etc/skel/Desktop
+install -Dm755 diyar-install.desktop \
+    /etc/skel/Desktop/diyar-install.desktop
+
+echo "[DIYAR] diyar-installer installed → /usr/local/sbin/diyar-installer"

@@ -1,1 +1,29 @@
+#!/bin/bash
+# =============================================================================
+# Diyar OS — Live Hook: Install Vazirmatn Font
+# config/hooks/live/0010-vazirmatn-font.hook.chroot
+# =============================================================================
+set -e
 
+FONT_DIR="/usr/local/share/fonts/vazirmatn"
+VAZIR_VER="33.003"
+VAZIR_URL="https://github.com/rastikerdar/vazirmatn/releases/download/v${VAZIR_VER}/vazirmatn-fonts.zip"
+
+echo "[DIYAR] Installing Vazirmatn font..."
+
+mkdir -p "$FONT_DIR"
+TMP=$(mktemp -d)
+
+# Try download, fall back to embedded stub notice
+if curl -fsSL --retry 3 "$VAZIR_URL" -o "${TMP}/vazirmatn.zip" 2>/dev/null; then
+    apt-get install -y --no-install-recommends unzip 2>/dev/null || true
+    unzip -q "${TMP}/vazirmatn.zip" "*.ttf" -d "${TMP}/fonts/" 2>/dev/null \
+        || unzip -q "${TMP}/vazirmatn.zip" -d "${TMP}/fonts/" 2>/dev/null
+    find "${TMP}/fonts/" -name "*.ttf" -exec install -Dm644 {} "${FONT_DIR}/" \;
+    echo "[DIYAR] Vazirmatn installed ($(ls "${FONT_DIR}"/*.ttf 2>/dev/null | wc -l) files)"
+else
+    echo "[DIYAR] WARNING: Could not download Vazirmatn (no network?). Will use Noto Arabic."
+fi
+
+rm -rf "$TMP"
+fc-cache -fv > /dev/null 2>&1 || true

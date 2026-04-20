@@ -1,0 +1,235 @@
+#!/bin/bash
+# =============================================================================
+# Diyar OS — Live Hook: XFCE4 RTL Desktop Configuration
+# config/hooks/live/0050-xfce4-desktop.hook.chroot
+# =============================================================================
+set -e
+
+SKEL_XFCE="/etc/skel/.config/xfce4/xfconf/xfce-perchannel-xml"
+SKEL_GTK3="/etc/skel/.config/gtk-3.0"
+SKEL_AUTOSTART="/etc/skel/.config/autostart"
+
+mkdir -p "$SKEL_XFCE" "$SKEL_GTK3" "$SKEL_AUTOSTART"
+
+echo "[DIYAR] Configuring XFCE4 RTL desktop..."
+
+# --- xsettings: GTK font, RTL, theme ---
+cat > "${SKEL_XFCE}/xsettings.xml" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xsettings" version="1.0">
+  <property name="Gtk/FontName"           type="string" value="Vazirmatn 10"/>
+  <property name="Gtk/MonospaceFontName"  type="string" value="Monospace 10"/>
+  <property name="Gtk/CursorThemeName"    type="string" value="Adwaita"/>
+  <property name="Gtk/CursorThemeSize"    type="int"    value="24"/>
+  <property name="Gtk/IconThemeName"      type="string" value="Papirus-Dark"/>
+  <property name="Gtk/ThemeName"          type="string" value="Arc-Dark"/>
+  <property name="Gtk/DecorationLayout"   type="string" value="close,minimize,maximize:"/>
+  <property name="Xft/Antialias"          type="int"    value="1"/>
+  <property name="Xft/Hinting"            type="int"    value="1"/>
+  <property name="Xft/HintStyle"          type="string" value="hintslight"/>
+  <property name="Xft/RGBA"               type="string" value="rgb"/>
+  <property name="Xft/Lcdfilter"          type="string" value="lcddefault"/>
+  <property name="Xft/DPI"                type="int"    value="96"/>
+  <property name="Gtk/IMModule"           type="string" value="ibus"/>
+  <property name="Gtk/ToolbarStyle"       type="string" value="icons"/>
+</channel>
+EOF
+
+# --- xfwm4: window manager —  sharp, modern ---
+cat > "${SKEL_XFCE}/xfwm4.xml" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfwm4" version="1.0">
+  <property name="general" type="empty">
+    <property name="theme"                type="string" value="Arc-Dark"/>
+    <property name="title_font"           type="string" value="Vazirmatn Bold 9"/>
+    <property name="title_alignment"      type="string" value="right"/>
+    <property name="button_layout"        type="string" value="CMH|"/>
+    <property name="frame_opacity"        type="int"    value="100"/>
+    <property name="inactive_opacity"     type="int"    value="90"/>
+    <property name="use_compositing"      type="bool"   value="true"/>
+    <property name="show_frame_shadow"    type="bool"   value="true"/>
+    <property name="shadow_opacity"       type="int"    value="50"/>
+    <property name="shadow_delta_x"       type="int"    value="0"/>
+    <property name="shadow_delta_y"       type="int"    value="1"/>
+    <property name="shadow_delta_width"   type="int"    value="-2"/>
+    <property name="shadow_delta_height"  type="int"    value="-2"/>
+    <property name="wrap_windows"         type="bool"   value="false"/>
+    <property name="snap_to_border"       type="bool"   value="true"/>
+    <property name="snap_to_windows"      type="bool"   value="true"/>
+    <property name="snap_width"           type="int"    value="8"/>
+  </property>
+</channel>
+EOF
+
+# --- Panel: RTL layout, dark, Vazirmatn clock ---
+cat > "${SKEL_XFCE}/xfce4-panel.xml" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfce4-panel" version="1.0">
+  <property name="panels" type="array">
+    <value type="int" value="1"/>
+    <property name="panel-1" type="empty">
+      <property name="position"          type="string" value="p=8;x=0;y=0"/>
+      <property name="position-locked"   type="bool"   value="true"/>
+      <property name="size"              type="uint"   value="34"/>
+      <property name="length"            type="uint"   value="100"/>
+      <property name="length-adjust"     type="bool"   value="true"/>
+      <property name="background-style"  type="uint"   value="1"/>
+      <property name="background-color"  type="array">
+        <value type="uint" value="22"/>
+        <value type="uint" value="27"/>
+        <value type="uint" value="40"/>
+        <value type="uint" value="255"/>
+      </property>
+      <property name="enter-opacity"     type="uint"   value="100"/>
+      <property name="leave-opacity"     type="uint"   value="96"/>
+      <property name="plugin-ids" type="array">
+        <value type="int" value="10"/>
+        <value type="int" value="11"/>
+        <value type="int" value="12"/>
+        <value type="int" value="13"/>
+        <value type="int" value="14"/>
+        <value type="int" value="15"/>
+        <value type="int" value="16"/>
+        <value type="int" value="17"/>
+      </property>
+    </property>
+  </property>
+  <property name="plugins" type="empty">
+    <property name="plugin-10" type="string" value="clock">
+      <property name="digital-format"    type="string" value="%H:%M  %a %d %b"/>
+      <property name="timezone"          type="string" value="Asia/Baghdad"/>
+      <property name="font"              type="string" value="Vazirmatn 9"/>
+    </property>
+    <property name="plugin-11" type="string" value="systray">
+      <property name="size-max"          type="uint"   value="20"/>
+      <property name="show-frame"        type="bool"   value="false"/>
+    </property>
+    <property name="plugin-12" type="string" value="pulseaudio">
+      <property name="enable-keyboard-shortcuts" type="bool" value="true"/>
+    </property>
+    <property name="plugin-13" type="string" value="power-manager-plugin"/>
+    <property name="plugin-14" type="string" value="separator">
+      <property name="style"             type="uint"   value="0"/>
+      <property name="expand"            type="bool"   value="true"/>
+    </property>
+    <property name="plugin-15" type="string" value="tasklist">
+      <property name="show-labels"       type="bool"   value="true"/>
+      <property name="grouping"          type="uint"   value="1"/>
+      <property name="flat-buttons"      type="bool"   value="true"/>
+      <property name="max-button-length" type="uint"   value="200"/>
+    </property>
+    <property name="plugin-16" type="string" value="separator">
+      <property name="style"             type="uint"   value="0"/>
+      <property name="expand"            type="bool"   value="false"/>
+    </property>
+    <property name="plugin-17" type="string" value="whiskermenu">
+      <property name="button-title"      type="string" value="ديار"/>
+      <property name="show-button-title" type="bool"   value="true"/>
+      <property name="position-search-above-results" type="bool" value="true"/>
+    </property>
+  </property>
+</channel>
+EOF
+
+# --- Desktop: RTL icon gravity ---
+cat > "${SKEL_XFCE}/xfce4-desktop.xml" <<'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfce4-desktop" version="1.0">
+  <property name="desktop-icons" type="empty">
+    <property name="style"           type="int"    value="2"/>
+    <property name="icon-size"       type="uint"   value="48"/>
+    <property name="gravity"         type="uint"   value="1"/>
+    <property name="show-thumbnails" type="bool"   value="true"/>
+  </property>
+  <property name="backdrop" type="empty">
+    <property name="screen0" type="empty">
+      <property name="monitor0" type="empty">
+        <property name="workspace0" type="empty">
+          <property name="image-style"  type="int"    value="5"/>
+          <property name="last-image"   type="string" value="/usr/share/diyar-os/wallpapers/diyar-default.jpg"/>
+          <property name="rgba1" type="array">
+            <value type="double" value="0.086"/>
+            <value type="double" value="0.106"/>
+            <value type="double" value="0.157"/>
+            <value type="double" value="1.0"/>
+          </property>
+        </property>
+      </property>
+    </property>
+  </property>
+</channel>
+EOF
+
+# --- GTK3 settings ---
+cat > "${SKEL_GTK3}/settings.ini" <<'EOF'
+[Settings]
+gtk-font-name=Vazirmatn 10
+gtk-icon-theme-name=Papirus-Dark
+gtk-theme-name=Arc-Dark
+gtk-cursor-theme-name=Adwaita
+gtk-cursor-theme-size=24
+gtk-xft-antialias=1
+gtk-xft-hinting=1
+gtk-xft-hintstyle=hintslight
+gtk-xft-rgba=rgb
+gtk-application-prefer-dark-theme=1
+gtk-decoration-layout=close,minimize,maximize:
+EOF
+
+# GTK3 CSS: force RTL on all top-level windows
+cat > "${SKEL_GTK3}/gtk.css" <<'EOF'
+window, dialog, assistant { direction: rtl; }
+entry, label, treeview, textview { direction: rtl; }
+EOF
+
+# --- IBus autostart ---
+cat > "${SKEL_AUTOSTART}/ibus-daemon.desktop" <<'EOF'
+[Desktop Entry]
+Type=Application
+Name=IBus Input Method
+Name[ar]=محرر مدخلات IBus
+Exec=/usr/bin/ibus-daemon --daemonize --replace --xim
+Hidden=false
+X-GNOME-Autostart-enabled=true
+X-GNOME-Autostart-Delay=2
+EOF
+
+# --- Picom compositor config ---
+mkdir -p /etc/skel/.config/picom
+cat > /etc/skel/.config/picom/picom.conf <<'EOF'
+# Diyar OS — Picom compositor config (sharp, modern, no lag)
+backend = "glx";
+vsync = true;
+glx-no-stencil = true;
+glx-copy-from-front = false;
+
+# Shadows — subtle, sharp
+shadow = true;
+shadow-radius = 8;
+shadow-opacity = 0.4;
+shadow-offset-x = -4;
+shadow-offset-y = 4;
+shadow-exclude = [
+    "name = 'Notification'",
+    "class_g = 'Conky'",
+    "class_g ?= 'Notify-osd'",
+    "_GTK_FRAME_EXTENTS@:c"
+];
+
+# Fading — fast transitions
+fading = true;
+fade-delta = 6;
+fade-in-step = 0.04;
+fade-out-step = 0.04;
+
+# Opacity
+inactive-opacity = 0.93;
+active-opacity = 1.0;
+frame-opacity = 1.0;
+inactive-opacity-override = false;
+
+# Blur — disabled for performance
+blur-background = false;
+EOF
+
+echo "[DIYAR] XFCE4 RTL desktop configured."
