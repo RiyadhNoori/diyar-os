@@ -1,0 +1,13 @@
+# Diyar OS — Code Owners
+# These owners are automatically requested for review on PRs.
+
+# Default: repo owner reviews everything
+*                           @RiyadhNoori
+
+# CI/CD workflows — extra scrutiny
+.github/workflows/          @RiyadhNoori
+
+# Core hooks — affect the built ISO directly
+config/hooks/               @RiyadhNoori
+config/package-lists/       @RiyadhNoori
+auto/                       @RiyadhNoori
