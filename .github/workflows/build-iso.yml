@@ -310,26 +310,27 @@ jobs:
           echo "=== lb version ==="
           lb --version
 
-          echo "=== config/ contents ==="
-          find config/ -type f | sort
+          echo "=== config/common ==="
+          cat config/common || echo "no config/common"
 
           echo "=== Starting lb build ==="
-          sudo -E lb build noauto 2>&1 | sudo tee build-full.log
-          BUILD_EXIT=${PIPESTATUS[0]}
+          sudo lb build noauto > /tmp/lb-out.log 2>&1 || true
+          BUILD_EXIT=$?
+
+          echo "=== /tmp/lb-out.log ==="
+          cat /tmp/lb-out.log
 
           echo "=== build-full.log ==="
-          sudo cat build-full.log
+          sudo cat build-full.log 2>/dev/null || echo "(empty)"
 
           echo "=== chroot/build.log ==="
           sudo cat chroot/build.log 2>/dev/null || echo "(no chroot build log)"
 
-          echo "=== Directory listing ==="
-          ls -la
+          echo "=== local/ contents ==="
+          find local/ -type f 2>/dev/null | head -20 || true
 
-          if [ $BUILD_EXIT -ne 0 ]; then
-            echo "BUILD FAILED with exit code $BUILD_EXIT"
-            exit $BUILD_EXIT
-          fi
+          echo "=== EXIT CODE: $BUILD_EXIT ==="
+          exit $BUILD_EXIT
 
       - name: Locate and rename ISO
         id: locate_iso
