@@ -27,8 +27,10 @@ xfce4-settings
 xfconf
 xfce4-notifyd
 xfce4-power-manager
-xfce4-screensaver
 xfce4-taskmanager
+
+# --- Screen lock (xfce4-screensaver not in bookworm, use xscreensaver instead) ---
+xscreensaver
 
 # --- XFCE4 panel plugins ---
 xfce4-whiskermenu-plugin
@@ -42,7 +44,6 @@ xfce4-weather-plugin
 
 # --- GTK3 theme & icons ---
 adwaita-icon-theme
-gnome-icon-theme
 papirus-icon-theme
 arc-theme
 
