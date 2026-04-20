@@ -2,19 +2,7 @@
 # =============================================================================
 # Diyar OS — live-build master configuration
 # auto/config
-#
-# Uses only options valid across all live-build versions.
-# Options removed (not supported on Ubuntu runner's live-build):
-#   --bootappend-live-failsafe  -> moved to includes.chroot
-#   --debootstrap-options       -> set via env variable in workflow
-#   --bootloaders               -> handled by grub packages in package list
-#   --uefi-secure-boot          -> not needed
-#   --hostname / --username     -> moved into --bootappend-live
-#   --debian-installer          -> not needed, we use our own installer
-#   --win32-loader              -> not needed
-#   --hdd-label                 -> only valid for hdd image type
 # =============================================================================
-
 set -e
 
 lb config noauto \
@@ -38,4 +26,5 @@ lb config noauto \
     --apt-recommends         false \
     --compression            xz \
     --chroot-filesystem      squashfs \
+    --debootstrap-options    "--keyring=/usr/share/keyrings/debian-archive-keyring.gpg" \
     "${@}"
