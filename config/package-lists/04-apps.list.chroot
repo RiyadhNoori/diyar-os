@@ -1,0 +1,34 @@
+# =============================================================================
+# Diyar OS — Applications
+# config/package-lists/04-apps.list.chroot
+# =============================================================================
+
+# --- Web browser ---
+firefox-esr
+firefox-esr-l10n-ar
+
+# --- Office ---
+libreoffice-writer
+libreoffice-calc
+libreoffice-impress
+libreoffice-l10n-ar
+libreoffice-help-ar
+
+# --- Media ---
+vlc
+ffmpeg
+
+# --- PDF ---
+evince
+
+# --- Screenshot ---
+flameshot
+
+# --- Archive ---
+file-roller
+p7zip-full
+unrar-free
+
+# --- Communication ---
+thunderbird
+thunderbird-l10n-ar

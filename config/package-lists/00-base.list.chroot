@@ -1,1 +1,71 @@
+# =============================================================================
+# Diyar OS — Base System Packages
+# config/package-lists/00-base.list.chroot
+# =============================================================================
 
+# --- Kernel & boot ---
+linux-image-amd64
+linux-headers-amd64
+firmware-linux
+firmware-linux-nonfree
+firmware-misc-nonfree
+amd64-microcode
+intel-microcode
+
+# --- Init & core ---
+systemd
+systemd-sysv
+dbus
+dbus-user-session
+udev
+lsb-release
+
+# --- Network ---
+network-manager
+network-manager-gnome
+wpasupplicant
+wireless-tools
+rfkill
+net-tools
+curl
+wget
+ca-certificates
+
+# --- Live system ---
+live-boot
+live-boot-initramfs-tools
+live-config
+live-config-sysvinit
+live-tools
+user-setup
+
+# --- Shell & utilities ---
+bash
+bash-completion
+sudo
+rsync
+parted
+gparted
+gdisk
+e2fsprogs
+dosfstools
+ntfs-3g
+exfat-fuse
+lsof
+pciutils
+usbutils
+dmidecode
+inxi
+htop
+neofetch
+
+# --- Text & terminal ---
+nano
+less
+file
+grep
+gzip
+xz-utils
+zip
+unzip
+bzip2

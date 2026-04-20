@@ -1,0 +1,68 @@
+# =============================================================================
+# Diyar OS — Desktop Environment Packages
+# config/package-lists/01-desktop.list.chroot
+# =============================================================================
+
+# --- Display server ---
+xorg
+xserver-xorg
+x11-xserver-utils
+xinit
+lightdm
+lightdm-gtk-greeter
+lightdm-gtk-greeter-settings
+
+# --- XFCE4 core ---
+xfce4
+xfce4-session
+xfce4-panel
+xfwm4
+xfdesktop4
+thunar
+thunar-archive-plugin
+thunar-media-tags-plugin
+xfce4-terminal
+xfce4-appfinder
+xfce4-settings
+xfconf
+xfce4-notifyd
+xfce4-power-manager
+xfce4-screensaver
+xfce4-taskmanager
+
+# --- XFCE4 panel plugins ---
+xfce4-whiskermenu-plugin
+xfce4-pulseaudio-plugin
+xfce4-battery-plugin
+xfce4-clipman-plugin
+xfce4-datetime-plugin
+xfce4-netload-plugin
+xfce4-systemload-plugin
+xfce4-weather-plugin
+
+# --- GTK3 theme & icons ---
+adwaita-icon-theme
+gnome-icon-theme
+papirus-icon-theme
+arc-theme
+
+# --- Compositor & effects ---
+picom
+
+# --- Audio ---
+pulseaudio
+pulseaudio-utils
+pavucontrol
+alsa-utils
+
+# --- File manager extras ---
+file-roller
+engrampa
+
+# --- Viewer apps ---
+ristretto
+evince
+mousepad
+
+# --- Accessibility ---
+at-spi2-core

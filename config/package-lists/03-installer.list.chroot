@@ -1,0 +1,37 @@
+# =============================================================================
+# Diyar OS — Installer Dependencies (baked into live ISO)
+# config/package-lists/03-installer.list.chroot
+# =============================================================================
+
+# --- Installer UI ---
+whiptail
+dialog
+
+# --- Disk operations (installer engine) ---
+rsync
+parted
+gdisk
+e2fsprogs
+dosfstools
+uuid-runtime
+
+# --- Bootloader packages (both BIOS and UEFI) ---
+grub-pc
+grub-pc-bin
+grub-efi-amd64
+grub-efi-amd64-bin
+grub-efi-amd64-signed
+grub-common
+grub2-common
+os-prober
+
+# --- Chroot operations ---
+debootstrap
+arch-test
+
+# --- Password hashing in installer ---
+openssl
+
+# --- Hardware detection ---
+dmidecode
+lshw

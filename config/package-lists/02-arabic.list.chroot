@@ -1,0 +1,47 @@
+# =============================================================================
+# Diyar OS — Arabic Typography & Input Packages
+# config/package-lists/02-arabic.list.chroot
+# =============================================================================
+
+# --- Arabic fonts ---
+fonts-hosny-amiri
+fonts-noto-core
+fonts-noto-extra
+fonts-noto-ui-core
+fonts-liberation
+fonts-dejavu-core
+fonts-freefont-ttf
+
+# --- Fontconfig & rendering ---
+fontconfig
+libfontconfig1
+
+# --- Text shaping stack (Arabian Shield dependencies) ---
+libpango1.0-0
+libfribidi0
+libharfbuzz0b
+libharfbuzz-icu0
+libfreetype6
+libcairo2
+
+# --- Arabic input method ---
+ibus
+ibus-gtk
+ibus-gtk3
+ibus-m17n
+m17n-db
+ibus-table
+im-config
+
+# --- Locale & i18n ---
+locales
+locales-all
+
+# --- Arabic spell check ---
+aspell
+aspell-ar
+hunspell-ar
+
+# --- RTL toolkit support ---
+libglib2.0-0
+libgtk-3-0
