@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Install Diyar OS
+Name[ar]=تثبيت نظام ديار
+Comment=Install Diyar OS to your hard drive
+Comment[ar]=قم بتثبيت نظام ديار على القرص الصلب
+Exec=xterm -fa "Monospace" -fs 11 -bg "#0D1525" -fg "#C8D4E8" -title "Diyar OS Installer — ديار" -e bash -c "sudo /usr/local/sbin/diyar-installer; echo 'Press Enter to close...'; read"
+Icon=system-software-install
+Terminal=false
+Categories=System;
+Keywords=install;setup;diyar;
+StartupNotify=true
