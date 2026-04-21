@@ -2,33 +2,44 @@
 # =============================================================================
 # Diyar OS — Live Hook: Install Diyar Installer
 # config/hooks/live/0030-diyar-installer.hook.chroot
+#
+# Uses bundled copy from config/includes.chroot/opt/diyar-installer/
+# (live-build copies includes.chroot into the chroot before hooks run)
+# Network clone is attempted first, bundled copy used as fallback.
 # =============================================================================
 set -e
 
-INSTALLER_REPO="https://github.com/RiyadhNoori/diyar-installer"
 INSTALLER_DEST="/opt/diyar-installer"
+INSTALLER_REPO="https://github.com/RiyadhNoori/diyar-installer"
 
 echo "[DIYAR] Installing diyar-installer..."
 
-# Try cloning from GitHub; if offline, use the copy already included
-# in config/includes.chroot/opt/diyar-installer (see includes dir)
-if git clone --depth=1 "$INSTALLER_REPO" "$INSTALLER_DEST" 2>/dev/null; then
-    echo "[DIYAR] Cloned diyar-installer from GitHub."
-elif [[ -d "/opt/diyar-installer" ]]; then
-    echo "[DIYAR] Using bundled diyar-installer (no network)."
+# The bundled copy is already at /opt/diyar-installer via includes.chroot
+# Attempt network clone to get latest version, fall back to bundled
+if git clone --depth=1 "$INSTALLER_REPO" "${INSTALLER_DEST}-new" 2>/dev/null; then
+    echo "[DIYAR] Cloned latest diyar-installer from GitHub."
+    rm -rf "$INSTALLER_DEST"
+    mv "${INSTALLER_DEST}-new" "$INSTALLER_DEST"
+elif [[ -d "$INSTALLER_DEST" ]]; then
+    echo "[DIYAR] Using bundled diyar-installer (no network access in chroot)."
 else
-    echo "[DIYAR] ERROR: diyar-installer not available." >&2
+    echo "[DIYAR] ERROR: No installer found — neither network nor bundled copy available."
     exit 1
 fi
 
+# Set executable permissions
+chmod +x "${INSTALLER_DEST}/core/engine.sh"
+chmod +x "${INSTALLER_DEST}/ui/diyar-installer"
+chmod +x "${INSTALLER_DEST}/hooks/post-install/01-arabic-setup.sh"
+
+# Install via Makefile
 cd "$INSTALLER_DEST"
 make install PREFIX=/usr/local
 
-# Desktop launcher on live session
+# Desktop launcher on live session desktop
 install -Dm644 diyar-install.desktop \
     /usr/share/applications/diyar-install.desktop
 
-# Also put shortcut on default desktop
 mkdir -p /etc/skel/Desktop
 install -Dm755 diyar-install.desktop \
     /etc/skel/Desktop/diyar-install.desktop
