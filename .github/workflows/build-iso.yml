@@ -361,40 +361,45 @@ jobs:
       - name: Build ISO
         id: build_iso
         run: |
-          set -x
-
-          echo "=== Environment ==="
-          whoami
-          pwd
+          echo "=== lb version ==="
           lb --version
 
           echo "=== config/common ==="
-          cat config/common 2>/dev/null || echo "MISSING config/common"
+          cat config/common 2>/dev/null || echo "MISSING"
+
+          echo "=== config/chroot ==="
+          cat config/chroot 2>/dev/null || echo "MISSING"
 
           echo "=== Running lb bootstrap ==="
-          sudo lb bootstrap noauto 2>&1 || {
-            echo "lb bootstrap FAILED"
-            sudo cat chroot/build.log 2>/dev/null || true
-            find . -name "*.log" -exec echo "=== {} ===" \; -exec sudo cat {} \; 2>/dev/null || true
-            exit 1
-          }
+          sudo lb bootstrap noauto 2>&1
+          echo "bootstrap exit: $?"
 
-          echo "=== lb bootstrap OK, running lb chroot ==="
-          sudo lb chroot noauto 2>&1 || {
-            echo "lb chroot FAILED"
-            sudo cat chroot/build.log 2>/dev/null || true
-            exit 1
-          }
+          echo "=== Running lb chroot ==="
+          sudo lb chroot noauto 2>&1
+          LB_EXIT=$?
+          echo "chroot exit: $LB_EXIT"
 
-          echo "=== lb chroot OK, running lb binary ==="
-          sudo lb binary noauto 2>&1 || {
-            echo "lb binary FAILED"
-            sudo cat chroot/build.log 2>/dev/null || true
-            exit 1
-          }
+          echo "=== chroot/build.log ==="
+          sudo cat chroot/build.log 2>/dev/null || echo "(empty)"
 
-          echo "=== All stages complete ==="
+          echo "=== chroot/debootstrap/debootstrap.log ==="
+          sudo cat chroot/debootstrap/debootstrap.log 2>/dev/null || echo "(empty)"
+
+          echo "=== apt logs in chroot ==="
+          sudo cat chroot/var/log/apt/term.log 2>/dev/null | tail -50 || echo "(empty)"
+          sudo cat chroot/var/log/dpkg.log 2>/dev/null | tail -50 || echo "(empty)"
+
+          if [ $LB_EXIT -ne 0 ]; then
+            exit $LB_EXIT
+          fi
+
+          echo "=== Running lb binary ==="
+          sudo lb binary noauto 2>&1
+          LB_EXIT=$?
+          echo "binary exit: $LB_EXIT"
+
           ls -la
+          exit $LB_EXIT
 
       - name: Locate and rename ISO
         id: locate_iso
