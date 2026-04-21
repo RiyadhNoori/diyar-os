@@ -1,1 +1,281 @@
+#!/usr/bin/env bash
+# =============================================================================
+# Diyar OS — Installer (self-contained)
+# Engine: rsync live → HDD (proven refracta/AntiX pattern)
+# No external sourcing, no make, no missing deps.
+# =============================================================================
+set -euo pipefail
 
+[[ $EUID -eq 0 ]] || exec sudo "$0" "$@"
+
+export NEWT_COLORS='
+root=,black
+border=white,black
+title=brightcyan,black
+button=black,brightcyan
+actbutton=black,yellow
+listbox=white,black
+actlistbox=yellow,black
+textbox=white,black
+acttextbox=yellow,black
+entry=white,black
+'
+
+T="Diyar OS Installer — ديار"
+LOG="/var/log/diyar-installer.log"
+TARGET="/target"
+mkdir -p "$(dirname $LOG)"
+log() { echo "[$(date '+%H:%M:%S')] $*" | tee -a "$LOG"; }
+die() { whiptail --title "$T" --msgbox "ERROR:\n$*\n\nLog: $LOG" 12 62; exit 1; }
+
+# ── Welcome ───────────────────────────────────────────────────────────────────
+whiptail --title "$T" --msgbox "\
+Welcome to Diyar OS Installer
+مرحباً بك في مثبّت نظام ديار
+──────────────────────────────────────
+Copies the live system to your disk.
+Sets up Arabic locale + user account.
+Supports BIOS and UEFI.
+
+Takes 5–15 minutes.
+Press OK to begin." 16 58
+
+# ── Disk selection ────────────────────────────────────────────────────────────
+DISKS=()
+while IFS= read -r line; do
+    DEV=$(echo "$line" | awk '{print $1}')
+    SIZE=$(echo "$line" | awk '{print $4}')
+    MODEL=$(lsblk -dno MODEL "$DEV" 2>/dev/null | xargs || echo "Disk")
+    DISKS+=("$DEV" "$SIZE  $MODEL")
+done < <(lsblk -dpno NAME,MAJ:MIN,RM,SIZE | grep -E "^/dev/(sd|nvme|vd|mmcblk)" || true)
+
+[[ ${#DISKS[@]} -eq 0 ]] && die "No disks detected."
+
+TARGET_DISK=$(whiptail --title "$T" \
+    --menu "Select target disk:\nاختر القرص:\n\n ALL DATA WILL BE ERASED" \
+    18 68 6 "${DISKS[@]}" 3>&1 1>&2 2>&3) || exit 0
+
+# ── Hostname ──────────────────────────────────────────────────────────────────
+HOSTNAME=$(whiptail --title "$T" \
+    --inputbox "Hostname / اسم الجهاز:" \
+    9 58 "diyar-pc" 3>&1 1>&2 2>&3) || exit 0
+HOSTNAME=$(echo "$HOSTNAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9-]/-/g')
+[[ -z "$HOSTNAME" ]] && HOSTNAME="diyar-pc"
+
+# ── Username ──────────────────────────────────────────────────────────────────
+USERNAME=$(whiptail --title "$T" \
+    --inputbox "Username / اسم المستخدم:" \
+    9 58 "user" 3>&1 1>&2 2>&3) || exit 0
+USERNAME=$(echo "$USERNAME" | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9_-]//g')
+[[ -z "$USERNAME" ]] && USERNAME="user"
+
+# ── Password ──────────────────────────────────────────────────────────────────
+while true; do
+    P1=$(whiptail --title "$T" --passwordbox "Password / كلمة المرور:" \
+        9 58 3>&1 1>&2 2>&3) || exit 0
+    P2=$(whiptail --title "$T" --passwordbox "Confirm password / تأكيد كلمة المرور:" \
+        9 58 3>&1 1>&2 2>&3) || exit 0
+    [[ "$P1" == "$P2" ]] && break
+    whiptail --title "$T" --msgbox "Passwords do not match." 8 46
+done
+[[ ${#P1} -lt 4 ]] && die "Password too short (min 4 chars)."
+
+# ── Locale ────────────────────────────────────────────────────────────────────
+LOCALE=$(whiptail --title "$T" --menu "Language / اللغة:" 18 68 7 \
+    "ar_IQ.UTF-8" "Arabic — Iraq (recommended)" \
+    "ar_SA.UTF-8" "Arabic — Saudi Arabia" \
+    "ar_EG.UTF-8" "Arabic — Egypt" \
+    "ar_JO.UTF-8" "Arabic — Jordan" \
+    "ar_SY.UTF-8" "Arabic — Syria" \
+    "en_US.UTF-8" "English — United States" \
+    "en_GB.UTF-8" "English — United Kingdom" \
+    3>&1 1>&2 2>&3) || exit 0
+
+# ── Timezone ──────────────────────────────────────────────────────────────────
+TZ=$(whiptail --title "$T" --menu "Timezone / المنطقة الزمنية:" 18 68 7 \
+    "Asia/Baghdad"  "Baghdad  UTC+3" \
+    "Asia/Riyadh"   "Riyadh   UTC+3" \
+    "Asia/Damascus" "Damascus UTC+3" \
+    "Asia/Amman"    "Amman    UTC+3" \
+    "Africa/Cairo"  "Cairo    UTC+2/+3" \
+    "Asia/Beirut"   "Beirut   UTC+2/+3" \
+    "UTC"           "UTC" \
+    3>&1 1>&2 2>&3) || exit 0
+
+# ── Confirm ───────────────────────────────────────────────────────────────────
+FW="BIOS"; [[ -d /sys/firmware/efi ]] && FW="UEFI"
+whiptail --title "$T" --yesno "\
+Summary / الملخص
+═══════════════════════════════════
+  Disk     : $TARGET_DISK
+  Firmware : $FW
+  Hostname : $HOSTNAME
+  User     : $USERNAME
+  Locale   : $LOCALE
+  Timezone : $TZ
+═══════════════════════════════════
+ALL DATA ON $TARGET_DISK WILL BE ERASED
+
+Proceed?" 18 56 || exit 0
+
+# ══════════════════════════════════════════════════════════════════════════════
+# INSTALLATION ENGINE
+# ══════════════════════════════════════════════════════════════════════════════
+(
+p() { echo "$1"; echo "XXX"; echo "$2"; echo "XXX"; }
+
+p 2 "Partitioning disk..."
+log "=== Diyar OS Installer starting ==="
+log "Disk=$TARGET_DISK FW=$FW"
+
+wipefs -a "$TARGET_DISK" >>"$LOG" 2>&1
+
+if [[ "$FW" == "UEFI" ]]; then
+    parted -s "$TARGET_DISK" mklabel gpt \
+        mkpart ESP fat32 1MiB 513MiB set 1 esp on \
+        mkpart primary ext4 513MiB 100% >>"$LOG" 2>&1
+    case "$TARGET_DISK" in
+        *nvme*|*mmcblk*) EFI="${TARGET_DISK}p1"; ROOT="${TARGET_DISK}p2" ;;
+        *) EFI="${TARGET_DISK}1"; ROOT="${TARGET_DISK}2" ;;
+    esac
+else
+    parted -s "$TARGET_DISK" mklabel msdos \
+        mkpart primary ext4 1MiB 100% set 1 boot on >>"$LOG" 2>&1
+    case "$TARGET_DISK" in
+        *nvme*|*mmcblk*) ROOT="${TARGET_DISK}p1" ;;
+        *) ROOT="${TARGET_DISK}1" ;;
+    esac
+fi
+
+p 8 "Formatting partitions..."
+udevadm settle --timeout=8 2>/dev/null || true
+mkfs.ext4 -F -L "diyar-root" "$ROOT" >>"$LOG" 2>&1
+[[ "$FW" == "UEFI" ]] && mkfs.fat -F32 -n "DIYAR-EFI" "$EFI" >>"$LOG" 2>&1
+
+p 12 "Mounting target filesystem..."
+mkdir -p "$TARGET"
+mount "$ROOT" "$TARGET"
+[[ "$FW" == "UEFI" ]] && { mkdir -p "$TARGET/boot/efi"; mount "$EFI" "$TARGET/boot/efi"; }
+
+p 15 "Copying system to disk (takes several minutes)..."
+log "Starting rsync..."
+rsync -aAXHv \
+    --exclude="/proc/*" --exclude="/sys/*" --exclude="/dev/*" \
+    --exclude="/run/*" --exclude="/tmp/*" --exclude="/mnt/*" \
+    --exclude="/media/*" --exclude="/lost+found" \
+    --exclude="/etc/live/*" --exclude="/lib/live/*" \
+    --exclude="/run/live/*" --exclude="/etc/machine-id" \
+    --exclude="/var/lib/dbus/machine-id" \
+    --exclude="/opt/diyar-installer" \
+    --exclude="/usr/local/sbin/diyar-installer" \
+    / "$TARGET/" >>"$LOG" 2>&1
+
+p 75 "Binding pseudo-filesystems..."
+for d in proc sys dev; do mount --bind /$d "$TARGET/$d"; done
+mount --bind /dev/pts "$TARGET/dev/pts"
+cp /etc/resolv.conf "$TARGET/etc/resolv.conf" 2>/dev/null || true
+
+p 78 "Setting hostname and hosts..."
+echo "$HOSTNAME" > "$TARGET/etc/hostname"
+printf "127.0.0.1\tlocalhost\n127.0.1.1\t%s\n::1\tlocalhost\n" \
+    "$HOSTNAME" > "$TARGET/etc/hosts"
+
+p 80 "Writing fstab..."
+udevadm settle --timeout=8 2>/dev/null || true
+RUUID=$(blkid -s UUID -o value "$ROOT" 2>/dev/null) || die "Cannot get UUID for $ROOT"
+printf "UUID=%s\t/\text4\terrors=remount-ro\t0\t1\ntmpfs\t/tmp\ttmpfs\tdefaults,nosuid\t0\t0\n" \
+    "$RUUID" > "$TARGET/etc/fstab"
+if [[ "$FW" == "UEFI" ]]; then
+    EUUID=$(blkid -s UUID -o value "$EFI" 2>/dev/null)
+    printf "UUID=%s\t/boot/efi\tvfat\tumask=0077\t0\t2\n" "$EUUID" >> "$TARGET/etc/fstab"
+fi
+
+p 82 "Configuring locale and timezone..."
+chroot "$TARGET" bash -c "
+    grep -q '$LOCALE' /etc/locale.gen || echo '$LOCALE UTF-8' >> /etc/locale.gen
+    grep -q 'en_US.UTF-8' /etc/locale.gen || echo 'en_US.UTF-8 UTF-8' >> /etc/locale.gen
+    locale-gen
+    echo 'LANG=$LOCALE' > /etc/default/locale
+" >>"$LOG" 2>&1
+ln -sf "/usr/share/zoneinfo/$TZ" "$TARGET/etc/localtime"
+echo "$TZ" > "$TARGET/etc/timezone"
+chroot "$TARGET" dpkg-reconfigure -f noninteractive tzdata >>"$LOG" 2>&1
+
+p 84 "Creating user account..."
+chroot "$TARGET" bash -c "
+    for u in diyar live; do id \$u &>/dev/null && userdel -r \$u 2>/dev/null || true; done
+    useradd -m -s /bin/bash -G sudo,audio,video,plugdev,netdev,bluetooth '$USERNAME'
+    echo '${USERNAME}:${P1}' | chpasswd
+    passwd -l root
+" >>"$LOG" 2>&1
+echo "$USERNAME ALL=(ALL) ALL" > "$TARGET/etc/sudoers.d/diyar-user"
+chmod 440 "$TARGET/etc/sudoers.d/diyar-user"
+
+p 86 "Removing live-boot packages..."
+chroot "$TARGET" bash -c "
+    for p in live-boot live-boot-initramfs-tools live-config live-config-systemd live-tools; do
+        dpkg -l \$p 2>/dev/null | grep -q '^ii' && \
+            DEBIAN_FRONTEND=noninteractive apt-get remove -y --purge \$p 2>/dev/null || true
+    done
+    apt-get autoremove -y --purge 2>/dev/null || true
+    apt-get clean 2>/dev/null || true
+    update-initramfs -u -k all
+" >>"$LOG" 2>&1
+
+p 90 "Installing GRUB bootloader..."
+cat > "$TARGET/etc/default/grub" <<'GEOF'
+GRUB_DEFAULT=0
+GRUB_TIMEOUT=5
+GRUB_DISTRIBUTOR="Diyar OS"
+GRUB_CMDLINE_LINUX_DEFAULT="quiet splash"
+GRUB_CMDLINE_LINUX=""
+GRUB_GFXMODE=1920x1080,1280x720,auto
+GRUB_GFXPAYLOAD_LINUX=keep
+GEOF
+
+if [[ "$FW" == "UEFI" ]]; then
+    chroot "$TARGET" bash -c "
+        DEBIAN_FRONTEND=noninteractive apt-get install -y grub-efi-amd64 2>/dev/null || true
+        grub-install --target=x86_64-efi --efi-directory=/boot/efi \
+            --bootloader-id=DiyarOS --recheck --no-floppy
+        grub-install --target=x86_64-efi --efi-directory=/boot/efi \
+            --bootloader-id=DiyarOS --removable --recheck 2>/dev/null || true
+        update-grub
+    " >>"$LOG" 2>&1
+else
+    chroot "$TARGET" bash -c "
+        DEBIAN_FRONTEND=noninteractive apt-get install -y grub-pc 2>/dev/null || true
+        grub-install --target=i386-pc --recheck '$TARGET_DISK'
+        update-grub
+    " >>"$LOG" 2>&1
+fi
+
+p 97 "Finalizing..."
+rm -f "$TARGET/etc/machine-id"
+chroot "$TARGET" systemd-machine-id-setup 2>/dev/null || \
+    dbus-uuidgen > "$TARGET/etc/machine-id"
+cp "$TARGET/etc/machine-id" "$TARGET/var/lib/dbus/machine-id" 2>/dev/null || true
+rm -f "$TARGET/etc/skel/Desktop/diyar-install.desktop" 2>/dev/null || true
+
+for d in dev/pts dev proc sys; do umount -lf "$TARGET/$d" 2>/dev/null || true; done
+[[ "$FW" == "UEFI" ]] && umount "$TARGET/boot/efi" 2>/dev/null || true
+sync
+umount "$TARGET" 2>/dev/null || true
+
+p 100 "Complete!"
+log "=== Installation finished successfully ==="
+
+) | whiptail --title "$T" --gauge \
+    "Installing Diyar OS — يتم تثبيت نظام ديار..." 8 58 0
+
+whiptail --title "$T" --yesno "\
+Installation Complete!
+اكتمل التثبيت بنجاح
+═══════════════════════════════════
+Installed to : $TARGET_DISK ($FW)
+User created : $USERNAME
+Locale       : $LOCALE
+═══════════════════════════════════
+Remove the USB and reboot.
+
+Reboot now?" 16 56 && reboot || true
