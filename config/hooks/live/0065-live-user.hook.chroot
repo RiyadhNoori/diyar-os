@@ -1,1 +1,28 @@
+#!/bin/bash
+# =============================================================================
+# Diyar OS — Live Hook: Configure Live Session User
+# config/hooks/live/0065-live-user.hook.chroot
+# =============================================================================
+set -e
 
+LIVE_USER="diyar"
+
+echo "[DIYAR] Configuring live user: ${LIVE_USER}..."
+
+# live-config creates the user — we just ensure sudo works without password
+# and set up the correct groups
+if id "$LIVE_USER" &>/dev/null; then
+    usermod -aG sudo,audio,video,plugdev,netdev,bluetooth "$LIVE_USER" 2>/dev/null || true
+fi
+
+# Passwordless sudo for live user (full session — not just installer)
+cat > /etc/sudoers.d/diyar-live << 'SUDOEOF'
+# Diyar OS live session — passwordless sudo
+diyar ALL=(ALL) NOPASSWD: ALL
+SUDOEOF
+chmod 440 /etc/sudoers.d/diyar-live
+
+# Also set a blank password for root (live session convenience)
+passwd -d root 2>/dev/null || true
+
+echo "[DIYAR] Live user configured."
