@@ -1,1 +1,441 @@
+#!/usr/bin/env bash
+# =============================================================================
+# Diyar OS Installer — Main UI
+# ui/diyar-installer
+#
+# Modern dialog-based installer UI with:
+#   - Arabic + English dual language
+#   - Clean step-by-step wizard
+#   - Live progress bar via named pipe
+#   - BIOS/UEFI auto-detection
+#   - Disk selection with size display
+# =============================================================================
 
+set -euo pipefail
+
+INSTALLER_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "${INSTALLER_DIR}/conf/installer.conf"
+source "${INSTALLER_DIR}/core/log.sh"
+source "${INSTALLER_DIR}/core/disk.sh"
+
+# ---------------------------------------------------------------------------
+# UI constants
+# ---------------------------------------------------------------------------
+TITLE="Diyar OS — ديار  |  Installation Wizard"
+WIDTH=72
+HEIGHT=20
+DIALOG_OK=0
+DIALOG_CANCEL=1
+DIALOG_ESC=255
+
+# Use whiptail (available on all Debian-based live systems)
+# Fall back to dialog if whiptail missing
+if command -v whiptail &>/dev/null; then
+    DIALOG="whiptail"
+elif command -v dialog &>/dev/null; then
+    DIALOG="dialog"
+else
+    echo "ERROR: Neither whiptail nor dialog is installed." >&2
+    exit 1
+fi
+
+# ---------------------------------------------------------------------------
+# Guards
+# ---------------------------------------------------------------------------
+[[ $EUID -eq 0 ]] || {
+    echo "Diyar Installer must be run as root."
+    echo "Run: sudo diyar-installer"
+    exit 1
+}
+
+mkdir -p "${INSTALLER_RUNTIME_DIR}"
+mkdir -p "$(dirname "${LOG_FILE:-/var/log/diyar-installer.log}")"
+
+# ---------------------------------------------------------------------------
+# Dialog helpers
+# ---------------------------------------------------------------------------
+msg() {
+    "$DIALOG" --title "$TITLE" --msgbox "$1" $HEIGHT $WIDTH
+}
+
+ask_yesno() {
+    "$DIALOG" --title "$TITLE" --yesno "$1" $HEIGHT $WIDTH
+}
+
+input_box() {
+    local prompt="$1"
+    local default="${2:-}"
+    "$DIALOG" --title "$TITLE" \
+              --inputbox "$prompt" $HEIGHT $WIDTH "$default" \
+              3>&1 1>&2 2>&3
+}
+
+password_box() {
+    local prompt="$1"
+    "$DIALOG" --title "$TITLE" \
+              --passwordbox "$prompt" $HEIGHT $WIDTH \
+              3>&1 1>&2 2>&3
+}
+
+menu_box() {
+    local prompt="$1"; shift
+    "$DIALOG" --title "$TITLE" \
+              --menu "$prompt" $HEIGHT $WIDTH 8 \
+              "$@" \
+              3>&1 1>&2 2>&3
+}
+
+# ---------------------------------------------------------------------------
+# Step 0 — Welcome screen
+# ---------------------------------------------------------------------------
+step_welcome() {
+    "$DIALOG" --title "$TITLE" \
+              --backtitle "Diyar OS — ديار نظام التشغيل" \
+              --msgbox "\
+Welcome to the Diyar OS Installer                    مرحباً بك في ديار
+─────────────────────────────────────────────────────────────────────
+
+Diyar OS is a modern Arabic-first Linux distribution
+built on Debian 12, designed for digital sovereignty
+and superior Arabic typography.
+
+نظام ديار هو توزيعة لينكس عربية حديثة مبنية على ديبيان 12
+مصممة للسيادة الرقمية والطباعة العربية الفائقة.
+
+This installer will:
+  • Partition your target disk
+  • Copy the live system to disk
+  • Configure bootloader (BIOS + UEFI supported)
+  • Set up your user account and Arabic locale
+
+The process takes approximately 5-15 minutes.
+
+Press OK to begin / اضغط موافق للبدء" \
+              22 $WIDTH
+}
+
+# ---------------------------------------------------------------------------
+# Step 1 — Disk selection
+# ---------------------------------------------------------------------------
+step_select_disk() {
+    local disk_list=()
+    local disk_info
+
+    while IFS= read -r line; do
+        local dev size model
+        dev="$(echo "$line" | awk '{print $1}')"
+        size="$(echo "$line" | awk '{print $2}')"
+        model="$(echo "$line" | awk '{$1=$2=""; print substr($0,3)}')"
+        model="${model:-Unknown disk}"
+        disk_list+=("$dev" "${size}  ${model}")
+    done < <(list_disks)
+
+    if [[ ${#disk_list[@]} -eq 0 ]]; then
+        msg "ERROR: No disks detected.\nCheck that your disk is connected."
+        exit 1
+    fi
+
+    TARGET_DISK="$(menu_box \
+        "Select the target disk for installation:\nاختر القرص المستهدف للتثبيت:\n\n⚠  ALL DATA ON THE SELECTED DISK WILL BE ERASED  ⚠" \
+        "${disk_list[@]}")"
+
+    [[ -z "$TARGET_DISK" ]] && { msg "No disk selected. Exiting."; exit 0; }
+
+    # Check space
+    if ! disk_has_space "$TARGET_DISK" "$MIN_DISK_GIB"; then
+        msg "ERROR: ${TARGET_DISK} is smaller than ${MIN_DISK_GIB} GiB.\nPlease choose a larger disk."
+        step_select_disk
+        return
+    fi
+
+    log_info "Target disk selected: ${TARGET_DISK} ($(disk_size_human "${TARGET_DISK}"))"
+}
+
+# ---------------------------------------------------------------------------
+# Step 2 — Partition mode
+# ---------------------------------------------------------------------------
+step_partition_mode() {
+    local choice
+    choice="$(menu_box \
+        "Partition mode / طريقة التقسيم:" \
+        "auto"   "Automatic — erase disk and partition automatically (recommended)" \
+        "manual" "Manual — I have already partitioned the disk with GParted")"
+
+    PARTITION_MODE="${choice:-auto}"
+    log_info "Partition mode: ${PARTITION_MODE}"
+
+    if [[ "$PARTITION_MODE" == "manual" ]]; then
+        step_manual_partitions
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Step 2b — Manual partition selection
+# ---------------------------------------------------------------------------
+step_manual_partitions() {
+    local part_list=()
+    while IFS= read -r line; do
+        local part size fstype
+        part="$(echo "$line" | awk '{print $1}')"
+        size="$(echo "$line" | awk '{print $4}')"
+        fstype="$(echo "$line" | awk '{print $7}')"
+        [[ "$part" == "$TARGET_DISK" ]] && continue
+        [[ "$part" =~ ^${TARGET_DISK} ]] && \
+            part_list+=("$part" "${size}  ${fstype:-?}")
+    done < <(lsblk -pno NAME,MAJ:MIN,RM,SIZE,RO,TYPE,FSTYPE 2>/dev/null \
+             | grep "part")
+
+    TARGET_PART_ROOT="$(menu_box \
+        "Select ROOT partition (/) — will be formatted as ext4:" \
+        "${part_list[@]}")"
+
+    [[ -z "$TARGET_PART_ROOT" ]] && { msg "No root partition selected. Exiting."; exit 0; }
+
+    if [[ -d /sys/firmware/efi ]]; then
+        TARGET_PART_EFI="$(menu_box \
+            "Select EFI partition (/boot/efi) — FAT32, ~512MB:" \
+            "${part_list[@]}")"
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Step 3 — Hostname
+# ---------------------------------------------------------------------------
+step_hostname() {
+    local h
+    h="$(input_box \
+        "Enter hostname for your system:\nأدخل اسم الجهاز:\n(e.g. diyar-pc, my-laptop)" \
+        "diyar")"
+
+    # Validate: lowercase alphanumeric + hyphens only
+    if [[ ! "$h" =~ ^[a-z][a-z0-9-]{0,62}$ ]]; then
+        msg "Invalid hostname.\nUse only lowercase letters, numbers, and hyphens.\nMust start with a letter."
+        step_hostname
+        return
+    fi
+
+    DIYAR_HOSTNAME="$h"
+    log_info "Hostname: ${DIYAR_HOSTNAME}"
+}
+
+# ---------------------------------------------------------------------------
+# Step 4 — Username
+# ---------------------------------------------------------------------------
+step_username() {
+    local u
+    u="$(input_box \
+        "Enter your username:\nأدخل اسم المستخدم:\n(lowercase letters and numbers only)" \
+        "user")"
+
+    if [[ ! "$u" =~ ^[a-z][a-z0-9_-]{0,30}$ ]]; then
+        msg "Invalid username.\nUse only lowercase letters, numbers, underscores, or hyphens."
+        step_username
+        return
+    fi
+
+    DIYAR_USERNAME="$u"
+
+    DIYAR_FULLNAME="$(input_box \
+        "Enter your full name (optional):\nأدخل اسمك الكامل (اختياري):" \
+        "")" || true
+
+    log_info "Username: ${DIYAR_USERNAME}"
+}
+
+# ---------------------------------------------------------------------------
+# Step 5 — Password
+# ---------------------------------------------------------------------------
+step_password() {
+    local p1 p2
+    p1="$(password_box "Enter password for '${DIYAR_USERNAME}':\nأدخل كلمة المرور:")"
+    p2="$(password_box "Confirm password:\nأعد إدخال كلمة المرور:")"
+
+    if [[ "$p1" != "$p2" ]]; then
+        msg "Passwords do not match.\nكلمتا المرور غير متطابقتين."
+        step_password
+        return
+    fi
+
+    if [[ ${#p1} -lt 6 ]]; then
+        msg "Password must be at least 6 characters.\nكلمة المرور يجب أن تكون 6 أحرف على الأقل."
+        step_password
+        return
+    fi
+
+    DIYAR_PASSWORD="$p1"
+    log_info "Password set for ${DIYAR_USERNAME}."
+}
+
+# ---------------------------------------------------------------------------
+# Step 6 — Locale / Timezone
+# ---------------------------------------------------------------------------
+step_locale() {
+    local locale
+    locale="$(menu_box \
+        "Select system language / اختر لغة النظام:" \
+        "ar_IQ.UTF-8"  "العربية — العراق  (Arabic Iraq)       [recommended]" \
+        "ar_SA.UTF-8"  "العربية — السعودية (Arabic Saudi Arabia)" \
+        "ar_EG.UTF-8"  "العربية — مصر     (Arabic Egypt)" \
+        "ar_JO.UTF-8"  "العربية — الأردن  (Arabic Jordan)" \
+        "ar_SY.UTF-8"  "العربية — سوريا   (Arabic Syria)" \
+        "ar_LB.UTF-8"  "العربية — لبنان   (Arabic Lebanon)" \
+        "en_US.UTF-8"  "English — United States" \
+        "en_GB.UTF-8"  "English — United Kingdom")"
+
+    DIYAR_LOCALE="${locale:-ar_IQ.UTF-8}"
+
+    local tz
+    tz="$(menu_box \
+        "Select timezone / اختر المنطقة الزمنية:" \
+        "Asia/Baghdad"   "Baghdad — بغداد         (UTC+3)" \
+        "Asia/Riyadh"    "Riyadh — الرياض          (UTC+3)" \
+        "Asia/Damascus"  "Damascus — دمشق          (UTC+3)" \
+        "Asia/Amman"     "Amman — عمان             (UTC+3)" \
+        "Asia/Beirut"    "Beirut — بيروت           (UTC+3)" \
+        "Africa/Cairo"   "Cairo — القاهرة          (UTC+3)" \
+        "Europe/London"  "London — لندن            (UTC+0/+1)" \
+        "UTC"            "UTC")"
+
+    DIYAR_TIMEZONE="${tz:-Asia/Baghdad}"
+    log_info "Locale: ${DIYAR_LOCALE}, Timezone: ${DIYAR_TIMEZONE}"
+}
+
+# ---------------------------------------------------------------------------
+# Step 7 — Summary / Confirmation
+# ---------------------------------------------------------------------------
+step_confirm() {
+    local firmware
+    if [[ -d /sys/firmware/efi ]]; then
+        firmware="UEFI (GPT)"
+    else
+        firmware="BIOS/Legacy (MBR)"
+    fi
+
+    ask_yesno "\
+Installation Summary — ملخص التثبيت
+════════════════════════════════════════════════════════
+
+  Target disk    : ${TARGET_DISK}  ($(disk_size_human "${TARGET_DISK}"))
+  Partitioning   : ${PARTITION_MODE}
+  Firmware       : ${firmware}
+
+  Hostname       : ${DIYAR_HOSTNAME}
+  Username       : ${DIYAR_USERNAME}
+  Full name      : ${DIYAR_FULLNAME:-—}
+  Locale         : ${DIYAR_LOCALE}
+  Timezone       : ${DIYAR_TIMEZONE}
+
+════════════════════════════════════════════════════════
+⚠  ALL DATA ON ${TARGET_DISK} WILL BE PERMANENTLY ERASED  ⚠
+
+Proceed with installation?
+هل تريد المتابعة في التثبيت؟" || {
+        msg "Installation cancelled.\nتم إلغاء التثبيت."
+        exit 0
+    }
+}
+
+# ---------------------------------------------------------------------------
+# Step 8 — Installation with live progress bar
+# ---------------------------------------------------------------------------
+step_install() {
+    # Write config for engine
+    cat > "${INSTALLER_RUNTIME_DIR}/active.conf" <<EOF
+TARGET_DISK="${TARGET_DISK}"
+TARGET_PART_ROOT="${TARGET_PART_ROOT}"
+TARGET_PART_EFI="${TARGET_PART_EFI:-}"
+TARGET_PART_SWAP="${TARGET_PART_SWAP:-}"
+PARTITION_MODE="${PARTITION_MODE}"
+DIYAR_HOSTNAME="${DIYAR_HOSTNAME}"
+DIYAR_USERNAME="${DIYAR_USERNAME}"
+DIYAR_PASSWORD="${DIYAR_PASSWORD}"
+DIYAR_FULLNAME="${DIYAR_FULLNAME:-}"
+DIYAR_LOCALE="${DIYAR_LOCALE}"
+DIYAR_TIMEZONE="${DIYAR_TIMEZONE}"
+EOF
+    chmod 600 "${INSTALLER_RUNTIME_DIR}/active.conf"
+
+    # Create named pipe for progress
+    rm -f "$PROGRESS_PIPE"
+    mkfifo "$PROGRESS_PIPE"
+
+    # Start engine in background, feeding progress to whiptail gauge
+    (
+        source "${INSTALLER_RUNTIME_DIR}/active.conf"
+        bash "${INSTALLER_DIR}/core/engine.sh" &
+        ENGINE_PID=$!
+
+        # Feed progress pipe to gauge
+        while IFS='|' read -r pct msg; do
+            echo "$pct"
+            echo "XXX"
+            echo "${pct}% — ${msg}"
+            echo "XXX"
+            [[ "$pct" -ge 100 ]] && break
+        done < "$PROGRESS_PIPE"
+
+        wait $ENGINE_PID
+    ) | "$DIALOG" \
+            --title "$TITLE" \
+            --gauge "Installing Diyar OS...\nيتم تثبيت نظام ديار..." \
+            10 $WIDTH 0
+
+    # Check result
+    local exit_code=${PIPESTATUS[0]}
+    if [[ $exit_code -ne 0 ]]; then
+        msg "Installation FAILED.\n\nSee log for details:\n  /var/log/diyar-installer.log\n\nتعذّر التثبيت. راجع ملف السجل."
+        exit 1
+    fi
+}
+
+# ---------------------------------------------------------------------------
+# Step 9 — Done
+# ---------------------------------------------------------------------------
+step_done() {
+    "$DIALOG" --title "$TITLE" \
+              --msgbox "\
+Installation Complete!  —  اكتمل التثبيت!
+══════════════════════════════════════════════════
+
+  Diyar OS has been successfully installed.
+  تم تثبيت نظام ديار بنجاح.
+
+  ✓ System copied to ${TARGET_DISK}
+  ✓ GRUB bootloader installed
+  ✓ Arabic locale configured
+  ✓ User '${DIYAR_USERNAME}' created
+
+══════════════════════════════════════════════════
+
+Please remove the live USB and reboot.
+الرجاء إزالة محرك USB الحي وإعادة التشغيل.
+
+Press OK to reboot / اضغط موافق لإعادة التشغيل" \
+              20 $WIDTH
+
+    # Clean up sensitive runtime data
+    rm -f "${INSTALLER_RUNTIME_DIR}/active.conf"
+    rm -f "$PROGRESS_PIPE"
+
+    ask_yesno "Reboot now?\nإعادة التشغيل الآن؟" && reboot || true
+}
+
+# ---------------------------------------------------------------------------
+# Main wizard
+# ---------------------------------------------------------------------------
+main() {
+    log_info "=== Diyar Installer UI starting ==="
+
+    step_welcome
+    step_select_disk
+    step_partition_mode
+    step_hostname
+    step_username
+    step_password
+    step_locale
+    step_confirm
+    step_install
+    step_done
+}
+
+main "$@"
