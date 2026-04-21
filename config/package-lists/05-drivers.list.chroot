@@ -1,1 +1,111 @@
+# =============================================================================
+# Diyar OS — Hardware Drivers & Firmware (2008–2025 coverage)
+# config/package-lists/05-drivers.list.chroot
+# =============================================================================
 
+# ── Core firmware (already in 00-base, kept for clarity) ─────────────────────
+firmware-linux
+firmware-linux-nonfree
+firmware-misc-nonfree
+
+# ── CPU microcode ─────────────────────────────────────────────────────────────
+intel-microcode
+amd64-microcode
+
+# ── WiFi / Wireless ───────────────────────────────────────────────────────────
+# Intel WiFi (iwlwifi) — covers Intel 3945, 4965, 5xxx, 6xxx, 7xxx, 8xxx, 9xxx, AX series
+firmware-iwlwifi
+# Realtek WiFi — RTL8188, RTL8192, RTL8723, RTL8812, RTL8821, RTL8822 series
+firmware-realtek
+# Atheros/Qualcomm WiFi — AR9xxx, QCA6xxx series
+firmware-atheros
+# Broadcom WiFi — BCM4311, BCM4312, BCM4313, BCM43xx series (laptops)
+firmware-brcm80211
+# Ralink/MediaTek WiFi — RT2xxx, RT3xxx, RT5xxx series
+firmware-ralink
+# Marvell WiFi — SD8686, SD8688, SD8787, SD8897
+firmware-libertas
+# NetXen/QLogic network
+firmware-qlogic
+# Zydas WiFi
+firmware-zd1211
+
+# ── Ethernet ──────────────────────────────────────────────────────────────────
+# Realtek Ethernet — RTL8111, RTL8168, RTL8169 (most common)
+firmware-realtek
+# Intel Ethernet — e100, e1000, e1000e, igb, ixgbe
+firmware-bnx2
+# Broadcom NetXtreme Ethernet
+firmware-bnx2x
+# Marvell Ethernet — sky2, mv643xx
+# (built into kernel, no firmware needed)
+
+# ── Display / GPU ─────────────────────────────────────────────────────────────
+# Intel GPU firmware — GMA 500, GMA 3600, Ivy Bridge, Haswell, Broadwell, Skylake+
+firmware-misc-nonfree
+# AMD/ATI GPU firmware — Radeon HD 2xxx–9xxx, RX series, Vega, RDNA
+firmware-amd-graphics
+# NVIDIA (open kernel module support)
+firmware-misc-nonfree
+# Generic VESA/framebuffer fallback (kernel built-in, always works)
+
+# ── Xorg display drivers ───────────────────────────────────────────────────────
+xserver-xorg-video-intel
+xserver-xorg-video-amdgpu
+xserver-xorg-video-radeon
+xserver-xorg-video-nouveau
+xserver-xorg-video-vesa
+xserver-xorg-video-fbdev
+xserver-xorg-video-vmware
+xserver-xorg-video-qxl
+
+# ── Input devices ─────────────────────────────────────────────────────────────
+xserver-xorg-input-libinput
+xserver-xorg-input-synaptics
+xserver-xorg-input-evdev
+xserver-xorg-input-wacom
+
+# ── Sound ─────────────────────────────────────────────────────────────────────
+# Intel HDA — covers most Intel/AMD integrated sound (2005–present)
+firmware-sof-signed
+# Cirrus Logic / Realtek audio codecs — built into kernel alsa
+alsa-firmware-loaders
+# Creative Sound Blaster — EMU10K1
+firmware-emu10k1
+
+# ── Bluetooth ─────────────────────────────────────────────────────────────────
+bluetooth
+bluez
+bluez-firmware
+firmware-iwlwifi
+
+# ── USB & peripheral ──────────────────────────────────────────────────────────
+firmware-ti-connectivity
+libusb-1.0-0
+
+# ── Touchpad / pointing ───────────────────────────────────────────────────────
+libinput-tools
+xinput
+
+# ── Laptop-specific ───────────────────────────────────────────────────────────
+acpi
+acpid
+acpi-support
+laptop-mode-tools
+tlp
+tlp-rdw
+
+# ── Storage / RAID ────────────────────────────────────────────────────────────
+firmware-bnx2
+mdadm
+lvm2
+
+# ── Printer support ───────────────────────────────────────────────────────────
+cups
+cups-filters
+printer-driver-gutenprint
+
+# ── VM guest support (VirtualBox, VMware, QEMU) ───────────────────────────────
+open-vm-tools
+open-vm-tools-desktop
+spice-vdagent
