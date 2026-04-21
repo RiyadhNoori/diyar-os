@@ -1,1 +1,2 @@
-
+# Diyar OS — allow live user to run installer without password
+diyar ALL=(ALL) NOPASSWD: /usr/local/sbin/diyar-installer
