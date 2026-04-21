@@ -1,9 +1,9 @@
 # =============================================================================
-# Diyar OS — Hardware Drivers & Firmware (2008–2025 coverage)
+# Diyar OS — Hardware Drivers & Firmware (verified Debian Bookworm packages)
 # config/package-lists/05-drivers.list.chroot
 # =============================================================================
 
-# ── Core firmware (already in 00-base, kept for clarity) ─────────────────────
+# ── Core firmware ─────────────────────────────────────────────────────────────
 firmware-linux
 firmware-linux-nonfree
 firmware-misc-nonfree
@@ -12,44 +12,40 @@ firmware-misc-nonfree
 intel-microcode
 amd64-microcode
 
-# ── WiFi / Wireless ───────────────────────────────────────────────────────────
-# Intel WiFi (iwlwifi) — covers Intel 3945, 4965, 5xxx, 6xxx, 7xxx, 8xxx, 9xxx, AX series
+# ── WiFi firmware ─────────────────────────────────────────────────────────────
+# Intel WiFi — 3945, 4965, 5000, 6000, 7000, 8000, 9000, AX200/AX201/AX210
 firmware-iwlwifi
-# Realtek WiFi — RTL8188, RTL8192, RTL8723, RTL8812, RTL8821, RTL8822 series
+# Realtek WiFi/BT — RTL8188, RTL8192, RTL8723, RTL8812, RTL8821, RTL8822
 firmware-realtek
-# Atheros/Qualcomm WiFi — AR9xxx, QCA6xxx series
+# Atheros/Qualcomm — AR9xxx, QCA6xxx
 firmware-atheros
-# Broadcom WiFi — BCM4311, BCM4312, BCM4313, BCM43xx series (laptops)
+# Broadcom WiFi — BCM4311/4312/4313/43xx (common in laptops)
 firmware-brcm80211
-# Ralink/MediaTek WiFi — RT2xxx, RT3xxx, RT5xxx series
+# Ralink/MediaTek — RT2xxx, RT3xxx, RT5xxx
 firmware-ralink
-# Marvell WiFi — SD8686, SD8688, SD8787, SD8897
+# Marvell WiFi — 88W8xxx series
 firmware-libertas
-# NetXen/QLogic network
-firmware-qlogic
-# Zydas WiFi
+# Zydas USB WiFi
 firmware-zd1211
 
-# ── Ethernet ──────────────────────────────────────────────────────────────────
-# Realtek Ethernet — RTL8111, RTL8168, RTL8169 (most common)
-firmware-realtek
-# Intel Ethernet — e100, e1000, e1000e, igb, ixgbe
+# ── Ethernet firmware ─────────────────────────────────────────────────────────
+# Broadcom NetXtreme/NetXtreme II
 firmware-bnx2
-# Broadcom NetXtreme Ethernet
 firmware-bnx2x
-# Marvell Ethernet — sky2, mv643xx
-# (built into kernel, no firmware needed)
+# QLogic network
+firmware-qlogic
+# Cavium/Marvell network
+firmware-cavium
+# Tehuti Networks
+firmware-ti-connectivity
 
-# ── Display / GPU ─────────────────────────────────────────────────────────────
-# Intel GPU firmware — GMA 500, GMA 3600, Ivy Bridge, Haswell, Broadwell, Skylake+
-firmware-misc-nonfree
-# AMD/ATI GPU firmware — Radeon HD 2xxx–9xxx, RX series, Vega, RDNA
+# ── GPU / Display firmware ────────────────────────────────────────────────────
+# AMD/ATI — Radeon HD 2xxx-9xxx, RX series, Vega, RDNA (amdgpu/radeon)
 firmware-amd-graphics
-# NVIDIA (open kernel module support)
-firmware-misc-nonfree
-# Generic VESA/framebuffer fallback (kernel built-in, always works)
+# Intel GPU — GMA 500/3600, Ivy Bridge through Arc (i915)
+# Covered by firmware-misc-nonfree above
 
-# ── Xorg display drivers ───────────────────────────────────────────────────────
+# ── Xorg display drivers ──────────────────────────────────────────────────────
 xserver-xorg-video-intel
 xserver-xorg-video-amdgpu
 xserver-xorg-video-radeon
@@ -65,47 +61,38 @@ xserver-xorg-input-synaptics
 xserver-xorg-input-evdev
 xserver-xorg-input-wacom
 
-# ── Sound ─────────────────────────────────────────────────────────────────────
-# Intel HDA — covers most Intel/AMD integrated sound (2005–present)
+# ── Sound firmware ────────────────────────────────────────────────────────────
+# Intel SOF (Sound Open Firmware) — modern Intel HDA systems
 firmware-sof-signed
-# Cirrus Logic / Realtek audio codecs — built into kernel alsa
-alsa-firmware-loaders
-# Creative Sound Blaster — EMU10K1
-firmware-emu10k1
+# Cirrus Logic, Realtek audio — built into alsa kernel modules
 
 # ── Bluetooth ─────────────────────────────────────────────────────────────────
 bluetooth
 bluez
 bluez-firmware
-firmware-iwlwifi
 
-# ── USB & peripheral ──────────────────────────────────────────────────────────
-firmware-ti-connectivity
-libusb-1.0-0
-
-# ── Touchpad / pointing ───────────────────────────────────────────────────────
-libinput-tools
-xinput
-
-# ── Laptop-specific ───────────────────────────────────────────────────────────
+# ── Laptop power management ───────────────────────────────────────────────────
 acpi
 acpid
 acpi-support
-laptop-mode-tools
 tlp
 tlp-rdw
 
-# ── Storage / RAID ────────────────────────────────────────────────────────────
-firmware-bnx2
+# ── Storage ───────────────────────────────────────────────────────────────────
 mdadm
 lvm2
 
-# ── Printer support ───────────────────────────────────────────────────────────
-cups
-cups-filters
-printer-driver-gutenprint
-
-# ── VM guest support (VirtualBox, VMware, QEMU) ───────────────────────────────
+# ── VM guest tools ────────────────────────────────────────────────────────────
 open-vm-tools
 open-vm-tools-desktop
 spice-vdagent
+
+# ── Hardware detection & tools ────────────────────────────────────────────────
+pciutils
+usbutils
+dmidecode
+lshw
+hwinfo
+libusb-1.0-0
+libinput-tools
+xinput
