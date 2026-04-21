@@ -35,7 +35,7 @@ ca-certificates
 live-boot
 live-boot-initramfs-tools
 live-config
-live-config-sysvinit
+live-config-systemd
 live-tools
 user-setup
 

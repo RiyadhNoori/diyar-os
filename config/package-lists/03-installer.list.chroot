@@ -1,6 +1,11 @@
 # =============================================================================
 # Diyar OS — Installer Dependencies (baked into live ISO)
 # config/package-lists/03-installer.list.chroot
+#
+# NOTE: Do NOT include grub-pc and grub-efi-amd64 together — they conflict.
+# The diyar-installer engine installs the correct grub package at install time
+# based on firmware detection (BIOS vs UEFI). We only need the bin/common
+# packages here for the installer to work from the live environment.
 # =============================================================================
 
 # --- Installer UI ---
@@ -15,19 +20,15 @@ e2fsprogs
 dosfstools
 uuid-runtime
 
-# --- Bootloader packages (both BIOS and UEFI) ---
-grub-pc
-grub-pc-bin
-grub-efi-amd64
-grub-efi-amd64-bin
-grub-efi-amd64-signed
+# --- Grub tools (firmware-neutral — no conflict) ---
 grub-common
 grub2-common
+grub-pc-bin
+grub-efi-amd64-bin
 os-prober
 
 # --- Chroot operations ---
 debootstrap
-arch-test
 
 # --- Password hashing in installer ---
 openssl
