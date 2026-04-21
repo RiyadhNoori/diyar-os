@@ -67,3 +67,6 @@ mousepad
 
 # --- Accessibility ---
 at-spi2-core
+
+# --- Terminal for installer launcher ---
+xterm
