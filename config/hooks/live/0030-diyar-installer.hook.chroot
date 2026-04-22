@@ -1,46 +1,83 @@
 #!/bin/bash
 # =============================================================================
-# Diyar OS — Live Hook: Install Diyar Installer
-# config/hooks/live/0030-diyar-installer.hook.chroot
+# Diyar OS — Installer Hook
+# Uses Calamares with calamares-settings-debian (official Debian live config)
 # =============================================================================
 set -e
 
-INSTALLER_SRC="/opt/diyar-installer"
-INSTALLER_LIB="/usr/local/lib/diyar-installer"
+echo "[DIYAR] Configuring Calamares installer..."
 
-echo "[DIYAR] Installing diyar-installer..."
+# ── Branding override ─────────────────────────────────────────────────────────
+mkdir -p /etc/calamares/branding/diyar
 
-[[ -d "$INSTALLER_SRC" ]] || {
-    echo "[DIYAR] ERROR: bundled installer not found at ${INSTALLER_SRC}"
-    exit 1
-}
+cat > /etc/calamares/branding/diyar/branding.desc << 'BRANDING'
+componentName: diyar
 
-# Install directly — no make required
-install -d "${INSTALLER_LIB}/core"
-install -d "${INSTALLER_LIB}/ui"
-install -d "${INSTALLER_LIB}/hooks/post-install"
-install -d "${INSTALLER_LIB}/conf"
-install -d /usr/local/sbin
-install -d /usr/share/applications
-install -d /etc/skel/Desktop
-install -d /run/diyar-installer
+strings:
+    productName:      "Diyar OS"
+    shortProductName: "Diyar"
+    version:          "1.0"
+    shortVersion:     "1.0"
+    versionedName:    "Diyar OS 1.0"
+    shortVersionedName: "Diyar 1.0"
+    bootloaderEntryName: "Diyar OS"
+    productUrl:       "https://github.com/RiyadhNoori/diyar-os"
+    supportUrl:       "https://github.com/RiyadhNoori/diyar-os/issues"
+    releaseNotesUrl:  "https://github.com/RiyadhNoori/diyar-os/releases"
 
-install -m755 "${INSTALLER_SRC}/core/engine.sh"       "${INSTALLER_LIB}/core/"
-install -m644 "${INSTALLER_SRC}/core/disk.sh"          "${INSTALLER_LIB}/core/"
-install -m644 "${INSTALLER_SRC}/core/chroot_setup.sh"  "${INSTALLER_LIB}/core/"
-install -m644 "${INSTALLER_SRC}/core/log.sh"           "${INSTALLER_LIB}/core/"
-install -m755 "${INSTALLER_SRC}/ui/diyar-installer"    "${INSTALLER_LIB}/ui/"
-install -m755 "${INSTALLER_SRC}/hooks/post-install/01-arabic-setup.sh" \
-              "${INSTALLER_LIB}/hooks/post-install/"
-install -m644 "${INSTALLER_SRC}/conf/installer.conf"   /etc/diyar-installer.conf
+images:
+    productLogo:   "diyar-logo.png"
+    productIcon:   "diyar-logo.png"
+    productWelcome: "diyar-welcome.png"
 
-# Entrypoint symlink
-ln -sf "${INSTALLER_LIB}/ui/diyar-installer" /usr/local/sbin/diyar-installer
+slideshow: "show.qml"
+slideshowAPI: 2
 
-# Desktop launchers
-install -m644 "${INSTALLER_SRC}/diyar-install.desktop" \
-              /usr/share/applications/diyar-install.desktop
-install -m755 "${INSTALLER_SRC}/diyar-install.desktop" \
-              /etc/skel/Desktop/diyar-install.desktop
+style:
+    sidebarBackground:    "#0D1525"
+    sidebarText:          "#C8D4E8"
+    sidebarTextSelect:    "#E8C170"
+    sidebarTextHighlight: "#C9963A"
+BRANDING
 
-echo "[DIYAR] diyar-installer installed → /usr/local/sbin/diyar-installer"
+# ── Override branding in main calamares settings ──────────────────────────────
+if [[ -f /etc/calamares/settings.conf ]]; then
+    sed -i 's/branding: debian/branding: diyar/' /etc/calamares/settings.conf
+fi
+
+# ── Desktop launcher ──────────────────────────────────────────────────────────
+cat > /usr/share/applications/install-debian.desktop << 'DESKTOP'
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Install Diyar OS
+Name[ar]=تثبيت نظام ديار
+Comment=Install Diyar OS to your hard drive
+Comment[ar]=قم بتثبيت نظام ديار على القرص الصلب
+Exec=calamares
+Icon=calamares
+Terminal=false
+Categories=System;
+Keywords=install;setup;diyar;
+StartupNotify=true
+DESKTOP
+
+# Copy to skel so live user sees it on desktop
+mkdir -p /etc/skel/Desktop
+cp /usr/share/applications/install-debian.desktop \
+   /etc/skel/Desktop/install-diyar.desktop
+chmod +x /etc/skel/Desktop/install-diyar.desktop
+
+# ── PolicyKit rule — allow live user to run Calamares without password ────────
+mkdir -p /etc/polkit-1/rules.d
+cat > /etc/polkit-1/rules.d/49-calamares.rules << 'POLKIT'
+polkit.addRule(function(action, subject) {
+    if (action.id === "org.freedesktop.policykit.exec" &&
+        action.lookup("program") === "/usr/bin/calamares" &&
+        subject.local && subject.active) {
+        return polkit.Result.YES;
+    }
+});
+POLKIT
+
+echo "[DIYAR] Calamares configured successfully."
