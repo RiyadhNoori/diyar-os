@@ -1,1 +1,22 @@
+[Icon Theme]
+Name=Diyar-Icons
+Comment=The official sovereign icon theme for Diyar OS.
+Inherits=Adwaita,hicolor
+Example=folder-home
 
+# مجلدات الأحجام
+Directories=scalable/apps,scalable/places,48x48/apps
+
+[scalable/apps]
+Size=256
+Context=Applications
+MinSize=8
+MaxSize=512
+Type=Scalable
+
+[scalable/places]
+Size=256
+Context=Places
+MinSize=8
+MaxSize=512
+Type=Scalable
