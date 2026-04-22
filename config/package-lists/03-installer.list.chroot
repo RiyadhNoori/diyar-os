@@ -1,37 +1,22 @@
 # =============================================================================
-# Diyar OS — Installer Dependencies (baked into live ISO)
+# Diyar OS — Installer disk tools (needed by Calamares backend)
 # config/package-lists/03-installer.list.chroot
-#
-# NOTE: Do NOT include grub-pc and grub-efi-amd64 together — they conflict.
-# The diyar-installer engine installs the correct grub package at install time
-# based on firmware detection (BIOS vs UEFI). We only need the bin/common
-# packages here for the installer to work from the live environment.
 # =============================================================================
 
-# --- Installer UI ---
-whiptail
-dialog
-
-# --- Disk operations (installer engine) ---
-rsync
+# --- Disk operations ---
 parted
 gdisk
 e2fsprogs
 dosfstools
 uuid-runtime
+debootstrap
 
-# --- Grub tools (firmware-neutral — no conflict) ---
+# --- Grub tools (firmware-neutral) ---
 grub-common
 grub2-common
 grub-pc-bin
 grub-efi-amd64-bin
 os-prober
-
-# --- Chroot operations ---
-debootstrap
-
-# --- Password hashing in installer ---
-openssl
 
 # --- Hardware detection ---
 dmidecode
