@@ -627,3 +627,4 @@ jobs:
             ${{ needs.build.outputs.iso_filename }}
             ${{ needs.build.outputs.iso_filename }}.sha256
           token: ${{ secrets.GITHUB_TOKEN }}
+ 
