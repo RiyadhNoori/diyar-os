@@ -1,83 +1,56 @@
 #!/bin/bash
 # =============================================================================
-# Diyar OS — Installer Hook
-# Uses Calamares with calamares-settings-debian (official Debian live config)
+# Diyar OS — Live Hook: Official Debian Installer
+# config/hooks/live/0030-diyar-installer.hook.chroot
+#
+# يستخدم debian-installer الرسمي — نفس الأداة التي تستخدمها
+# صور ديبيان الرسمية، مع مشغّل رسومي GTK
 # =============================================================================
 set -e
 
-echo "[DIYAR] Configuring Calamares installer..."
+echo "[DIYAR] إعداد مثبّت النظام الرسمي..."
 
-# ── Branding override ─────────────────────────────────────────────────────────
-mkdir -p /etc/calamares/branding/diyar
+# ── تثبيت مكوّنات المثبّت الرسمي ───────────────────────────────────────────
+DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    debian-installer-launcher \
+    localechooser-data \
+    2>/dev/null || true
 
-cat > /etc/calamares/branding/diyar/branding.desc << 'BRANDING'
-componentName: diyar
-
-strings:
-    productName:      "Diyar OS"
-    shortProductName: "Diyar"
-    version:          "1.0"
-    shortVersion:     "1.0"
-    versionedName:    "Diyar OS 1.0"
-    shortVersionedName: "Diyar 1.0"
-    bootloaderEntryName: "Diyar OS"
-    productUrl:       "https://github.com/RiyadhNoori/diyar-os"
-    supportUrl:       "https://github.com/RiyadhNoori/diyar-os/issues"
-    releaseNotesUrl:  "https://github.com/RiyadhNoori/diyar-os/releases"
-
-images:
-    productLogo:   "diyar-logo.png"
-    productIcon:   "diyar-logo.png"
-    productWelcome: "diyar-welcome.png"
-
-slideshow: "show.qml"
-slideshowAPI: 2
-
-style:
-    sidebarBackground:    "#0D1525"
-    sidebarText:          "#C8D4E8"
-    sidebarTextSelect:    "#E8C170"
-    sidebarTextHighlight: "#C9963A"
-BRANDING
-
-# ── Override branding in main calamares settings ──────────────────────────────
-if [[ -f /etc/calamares/settings.conf ]]; then
-    sed -i 's/branding: debian/branding: diyar/' /etc/calamares/settings.conf
-fi
-
-# ── Desktop launcher ──────────────────────────────────────────────────────────
-cat > /usr/share/applications/install-debian.desktop << 'DESKTOP'
+# ── ملف إطلاق سطح المكتب ────────────────────────────────────────────────────
+mkdir -p /usr/share/applications
+cat > /usr/share/applications/debian-installer-launcher.desktop <<'DESKTOP'
 [Desktop Entry]
 Version=1.0
 Type=Application
 Name=Install Diyar OS
 Name[ar]=تثبيت نظام ديار
-Comment=Install Diyar OS to your hard drive
-Comment[ar]=قم بتثبيت نظام ديار على القرص الصلب
-Exec=calamares
-Icon=calamares
+GenericName=System Installer
+GenericName[ar]=مثبّت النظام
+Comment=Install Diyar OS to your hard drive using the official installer
+Comment[ar]=ثبّت نظام ديار على قرصك الصلب
+Exec=debian-installer-launcher
+Icon=debian-installer
 Terminal=false
 Categories=System;
-Keywords=install;setup;diyar;
+Keywords=install;setup;diyar;debian;
 StartupNotify=true
 DESKTOP
 
-# Copy to skel so live user sees it on desktop
+# ── نسخ لسطح المكتب الافتراضي ───────────────────────────────────────────────
 mkdir -p /etc/skel/Desktop
-cp /usr/share/applications/install-debian.desktop \
-   /etc/skel/Desktop/install-diyar.desktop
-chmod +x /etc/skel/Desktop/install-diyar.desktop
+cp /usr/share/applications/debian-installer-launcher.desktop \
+   /etc/skel/Desktop/
+chmod +x /etc/skel/Desktop/debian-installer-launcher.desktop
 
-# ── PolicyKit rule — allow live user to run Calamares without password ────────
+# ── صلاحيات PolicyKit ───────────────────────────────────────────────────────
 mkdir -p /etc/polkit-1/rules.d
-cat > /etc/polkit-1/rules.d/49-calamares.rules << 'POLKIT'
+cat > /etc/polkit-1/rules.d/49-debian-installer.rules <<'POLKIT'
 polkit.addRule(function(action, subject) {
-    if (action.id === "org.freedesktop.policykit.exec" &&
-        action.lookup("program") === "/usr/bin/calamares" &&
+    if ((action.id === "org.freedesktop.policykit.exec") &&
         subject.local && subject.active) {
         return polkit.Result.YES;
     }
 });
 POLKIT
 
-echo "[DIYAR] Calamares configured successfully."
+echo "[DIYAR] debian-installer-launcher مثبّت ✅"

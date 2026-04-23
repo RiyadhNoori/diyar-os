@@ -1,0 +1,82 @@
+#!/bin/bash
+# =============================================================================
+# Diyar OS — Live Hook: تثبيت أيقونات وخلفيات ديار الرسمية
+# config/hooks/live/0075-diyar-branding-assets.hook.chroot
+#
+# يثبّت الأيقونات والخلفيات التي تمت معالجتها بواسطة build-icons.sh
+# الملفات مدمجة مسبقاً في config/includes.chroot/
+# =============================================================================
+set -e
+
+echo "[DIYAR] تثبيت هوية النظام البصرية..."
+
+ICON_SRC="/opt/diyar-branding/diyar-icons"
+WALL_SRC="/opt/diyar-branding/wallpapers"
+LOGO_SRC="/opt/diyar-branding/output/logo"
+
+# ── أيقونات ───────────────────────────────────────────────────────────────────
+if [[ -d "$ICON_SRC" ]]; then
+    cp -r "$ICON_SRC" /usr/share/icons/Diyar
+    gtk-update-icon-cache -f -t /usr/share/icons/Diyar 2>/dev/null || true
+    echo "[DIYAR] ✅ أيقونات ديار مثبّتة في /usr/share/icons/Diyar"
+else
+    echo "[DIYAR] ⚠ مجلد الأيقونات غير موجود — سيتم استخدام Papirus-Dark"
+fi
+
+# ── خلفيات ────────────────────────────────────────────────────────────────────
+mkdir -p /usr/share/diyar-os/wallpapers
+if [[ -d "$WALL_SRC" ]]; then
+    cp -r "$WALL_SRC"/. /usr/share/diyar-os/wallpapers/
+    echo "[DIYAR] ✅ خلفيات ديار مثبّتة"
+fi
+
+# ── شعار ─────────────────────────────────────────────────────────────────────
+if [[ -d "$LOGO_SRC" ]]; then
+    install -Dm644 "${LOGO_SRC}/diyar-logo-256.png" \
+        /usr/share/pixmaps/diyar-logo.png
+    install -Dm644 "${LOGO_SRC}/diyar-logo-48.png" \
+        /usr/share/icons/hicolor/48x48/apps/diyar-os.png
+    install -Dm644 "${LOGO_SRC}/diyar-logo-256.png" \
+        /usr/share/icons/hicolor/256x256/apps/diyar-os.png
+    gtk-update-icon-cache -f /usr/share/icons/hicolor 2>/dev/null || true
+    echo "[DIYAR] ✅ شعار ديار مثبّت"
+fi
+
+# ── تحديث إعدادات XFCE4 لاستخدام الأيقونات والخلفية الجديدة ─────────────────
+SKEL_XFCE="/etc/skel/.config/xfce4/xfconf/xfce-perchannel-xml"
+
+# تحديث ثيم الأيقونات في xsettings
+if [[ -f "${SKEL_XFCE}/xsettings.xml" ]]; then
+    # استبدال ثيم الأيقونات بـ Diyar
+    sed -i 's|value="Papirus-Dark"|value="Diyar"|g' \
+        "${SKEL_XFCE}/xsettings.xml"
+    echo "[DIYAR] ✅ ثيم الأيقونات محدّث إلى Diyar"
+fi
+
+# تحديث الخلفية الافتراضية إلى خلفية ديار الحقيقية
+if [[ -f "${SKEL_XFCE}/xfce4-desktop.xml" ]]; then
+    # تحديد ملف الخلفية الأنسب
+    if ls /usr/share/diyar-os/wallpapers/diyar-default-1920x1080.jpg &>/dev/null; then
+        WALL_FILE="/usr/share/diyar-os/wallpapers/diyar-default-1920x1080.jpg"
+    elif ls /usr/share/diyar-os/wallpapers/diyar-default.png &>/dev/null; then
+        WALL_FILE="/usr/share/diyar-os/wallpapers/diyar-default.png"
+    else
+        WALL_FILE="/usr/share/diyar-os/wallpapers/diyar-abstract-1920x1080.jpg"
+    fi
+
+    sed -i "s|last-image.*value=\"[^\"]*\"|last-image   type=\"string\" value=\"${WALL_FILE}\"|g" \
+        "${SKEL_XFCE}/xfce4-desktop.xml" 2>/dev/null || true
+    echo "[DIYAR] ✅ خلفية سطح المكتب محدّثة"
+fi
+
+# ── LightDM greeter — الشعار الجديد ─────────────────────────────────────────
+if [[ -f /etc/lightdm/lightdm-gtk-greeter.conf ]]; then
+    # الخلفية
+    if [[ -f "/usr/share/diyar-os/wallpapers/diyar-abstract-1920x1080.jpg" ]]; then
+        sed -i 's|^background=.*|background=/usr/share/diyar-os/wallpapers/diyar-abstract-1920x1080.jpg|' \
+            /etc/lightdm/lightdm-gtk-greeter.conf
+    fi
+    echo "[DIYAR] ✅ خلفية شاشة تسجيل الدخول محدّثة"
+fi
+
+echo "[DIYAR] اكتملت عملية تثبيت الهوية البصرية ✅"
