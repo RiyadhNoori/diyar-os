@@ -1,0 +1,90 @@
+#!/bin/bash
+set -e
+echo "[DIYAR] تطبيق إعدادات XFCE4..."
+
+SKEL_XFCE="/etc/skel/.config/xfce4/xfconf/xfce-perchannel-xml"
+mkdir -p "$SKEL_XFCE"
+
+# تحديد الخلفية المتاحة
+if [[ -f "/usr/share/diyar-os/wallpapers/diyar-default-1920x1080.jpg" ]]; then
+    WALL="/usr/share/diyar-os/wallpapers/diyar-default-1920x1080.jpg"
+elif [[ -f "/usr/share/diyar-os/wallpapers/diyar-default.png" ]]; then
+    WALL="/usr/share/diyar-os/wallpapers/diyar-default.png"
+else
+    WALL="/usr/share/backgrounds/xfce/xfce-verticals.png"
+fi
+
+# xfce4-desktop.xml — الخلفية
+cat > "${SKEL_XFCE}/xfce4-desktop.xml" << XMLEOF
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfce4-desktop" version="1.0">
+  <property name="backdrop" type="empty">
+    <property name="screen0" type="empty">
+      <property name="monitorVirtual1" type="empty">
+        <property name="workspace0" type="empty">
+          <property name="color-style" type="int" value="0"/>
+          <property name="image-style" type="int" value="5"/>
+          <property name="last-image" type="string" value="${WALL}"/>
+        </property>
+      </property>
+      <property name="monitor0" type="empty">
+        <property name="workspace0" type="empty">
+          <property name="color-style" type="int" value="0"/>
+          <property name="image-style" type="int" value="5"/>
+          <property name="last-image" type="string" value="${WALL}"/>
+        </property>
+      </property>
+    </property>
+  </property>
+</channel>
+XMLEOF
+
+# xsettings.xml — الأيقونات والثيم
+ICON_THEME="Diyar"
+[[ -d "/usr/share/icons/Diyar" ]] || ICON_THEME="Papirus-Dark"
+
+cat > "${SKEL_XFCE}/xsettings.xml" << XMLEOF
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xsettings" version="1.0">
+  <property name="Net" type="empty">
+    <property name="ThemeName" type="string" value="Arc-Dark"/>
+    <property name="IconThemeName" type="string" value="${ICON_THEME}"/>
+    <property name="EnableEventSounds" type="bool" value="false"/>
+  </property>
+  <property name="Gtk" type="empty">
+    <property name="FontName" type="string" value="Vazirmatn 11"/>
+    <property name="MonospaceFontName" type="string" value="Monospace 10"/>
+    <property name="CursorThemeName" type="string" value="Adwaita"/>
+    <property name="DecorationLayout" type="string" value="close,minimize,maximize:menu"/>
+  </property>
+</channel>
+XMLEOF
+
+# xfwm4.xml — ثيم النوافذ
+cat > "${SKEL_XFCE}/xfwm4.xml" << XMLEOF
+<?xml version="1.0" encoding="UTF-8"?>
+<channel name="xfwm4" version="1.0">
+  <property name="general" type="empty">
+    <property name="theme" type="string" value="Arc-Dark"/>
+    <property name="title_font" type="string" value="Vazirmatn Bold 10"/>
+    <property name="button_layout" type="string" value="CMH|"/>
+  </property>
+</channel>
+XMLEOF
+
+# LightDM greeter
+if [[ -f /etc/lightdm/lightdm-gtk-greeter.conf ]]; then
+    cat > /etc/lightdm/lightdm-gtk-greeter.conf << GREETER
+[greeter]
+background=${WALL}
+theme-name=Arc-Dark
+icon-theme-name=${ICON_THEME}
+font-name=Vazirmatn 12
+xft-antialias=true
+xft-hintstyle=slight
+indicators=~host;~spacer;~clock;~spacer;~power
+clock-format=%A %d %B  |  %H:%M
+GREETER
+fi
+
+echo "[DIYAR] إعدادات XFCE4 مطبّقة ✅"
