@@ -1,25 +1,23 @@
 # =============================================================================
-# Diyar OS — أدوات الصور والمثبّت
+# Diyar OS — المثبّت وأدوات الصور
 # config/package-lists/06-installer.list.chroot
 # =============================================================================
 
-# ── المثبّت الرسمي (debian-installer) ────────────────────────────────────────
-# هذه الأداة هي ما يستخدمه ديبيان الرسمي في صور Live
+# المثبّت الرسمي — localechooser-data محذوف (غير موجود في Bookworm)
 debian-installer-launcher
-localechooser-data
 
-# ── ImageMagick — معالجة الصور ──────────────────────────────────────────────
+# ImageMagick
 imagemagick
 imagemagick-common
 
-# ── أدوات الأقراص المطلوبة للمثبّت ─────────────────────────────────────────
+# أدوات الأقراص
 parted
 gdisk
 e2fsprogs
 dosfstools
 uuid-runtime
 
-# ── Grub (أدوات فقط بدون تعارض) ──────────────────────────────────────────────
+# Grub tools فقط (بدون تعارض)
 grub-common
 grub2-common
 grub-pc-bin
