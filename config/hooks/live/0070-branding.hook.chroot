@@ -1,0 +1,64 @@
+#!/bin/bash
+# =============================================================================
+# Diyar OS — Live Hook: تثبيت الهوية البصرية
+# config/hooks/live/0070-branding.hook.chroot
+#
+# ملاحظة: لا يتم تشغيل build-icons.sh هنا لأنه يستنزف موارد الـ chroot
+# الأيقونات المعالجة مسبقاً تُنسخ مباشرة من includes.chroot
+# =============================================================================
+set -e
+
+echo "[DIYAR] تثبيت الهوية البصرية لنظام ديار..."
+
+BRANDING_DIR="/opt/diyar-branding"
+
+# ── GTK Theme ────────────────────────────────────────────────────
+if [[ -d "${BRANDING_DIR}/gtk-theme" ]]; then
+    mkdir -p /usr/share/themes/Diyar
+    cp -r "${BRANDING_DIR}/gtk-theme/." /usr/share/themes/Diyar/
+    echo "[DIYAR] ✅ GTK theme"
+fi
+
+# ── Icon Theme ───────────────────────────────────────────────────
+if [[ -d "${BRANDING_DIR}/icons" ]]; then
+    mkdir -p /usr/share/icons/Diyar
+    cp -r "${BRANDING_DIR}/icons/." /usr/share/icons/Diyar/
+    gtk-update-icon-cache -f -t /usr/share/icons/Diyar 2>/dev/null || true
+    echo "[DIYAR] ✅ Icon theme"
+fi
+
+# ── Wallpapers ───────────────────────────────────────────────────
+if [[ -d "${BRANDING_DIR}/wallpapers" ]]; then
+    mkdir -p /usr/share/diyar-os/wallpapers
+    cp -r "${BRANDING_DIR}/wallpapers/." /usr/share/diyar-os/wallpapers/
+    echo "[DIYAR] ✅ Wallpapers"
+fi
+
+# ── Plymouth ─────────────────────────────────────────────────────
+if [[ -d "${BRANDING_DIR}/plymouth/diyar-theme" ]]; then
+    mkdir -p /usr/share/plymouth/themes/diyar
+    cp -r "${BRANDING_DIR}/plymouth/diyar-theme/." \
+          /usr/share/plymouth/themes/diyar/
+    update-alternatives --install \
+        /usr/share/plymouth/themes/default.plymouth \
+        default.plymouth \
+        /usr/share/plymouth/themes/diyar/diyar.plymouth 100 \
+        2>/dev/null || true
+    echo "[DIYAR] ✅ Plymouth theme"
+fi
+
+# ── GRUB Theme ───────────────────────────────────────────────────
+if [[ -d "${BRANDING_DIR}/grub-theme" ]]; then
+    mkdir -p /usr/share/grub/themes/diyar
+    cp -r "${BRANDING_DIR}/grub-theme/." /usr/share/grub/themes/diyar/
+    echo "[DIYAR] ✅ GRUB theme"
+fi
+
+# ── Logo ─────────────────────────────────────────────────────────
+if [[ -f "${BRANDING_DIR}/diyar-logo.svg" ]]; then
+    install -Dm644 "${BRANDING_DIR}/diyar-logo.svg" \
+        /usr/share/pixmaps/diyar-logo.svg
+    echo "[DIYAR] ✅ Logo"
+fi
+
+echo "[DIYAR] اكتملت الهوية البصرية ✅"
