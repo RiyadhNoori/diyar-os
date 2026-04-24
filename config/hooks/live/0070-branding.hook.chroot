@@ -1,48 +1,66 @@
 #!/bin/bash
 # =============================================================================
-# Diyar OS — Live Hook: Install Branding
-# (Add to diyar-os/config/hooks/live/0070-branding.hook.chroot)
+# Diyar OS — Live Hook: تثبيت الهوية البصرية
+# config/hooks/live/0070-branding.hook.chroot
 # =============================================================================
 set -e
 
-BRANDING_REPO="https://github.com/RiyadhNoori/diyar-branding"
+echo "[DIYAR] تثبيت الهوية البصرية لنظام ديار..."
+
 BRANDING_DIR="/opt/diyar-branding"
 
-echo "[DIYAR] Installing Diyar OS branding..."
-
-# Install conversion deps
-DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    librsvg2-bin \
-    python3-pil \
-    imagemagick \
-    plymouth \
-    plymouth-themes 2>/dev/null || true
-
-# Clone or use bundled
-if git clone --depth=1 "$BRANDING_REPO" "$BRANDING_DIR" 2>/dev/null; then
-    echo "[DIYAR] Cloned diyar-branding."
-elif [[ -d "$BRANDING_DIR" ]]; then
-    echo "[DIYAR] Using bundled branding."
-else
-    echo "[DIYAR] WARNING: Branding not available — using defaults."
-    exit 0
+# ── GTK Theme ────────────────────────────────────────────────────────────────
+if [[ -d "${BRANDING_DIR}/gtk-theme" ]]; then
+    mkdir -p /usr/share/themes/Diyar
+    cp -r "${BRANDING_DIR}/gtk-theme/." /usr/share/themes/Diyar/
+    echo "[DIYAR] ✅ GTK theme مثبّت"
 fi
 
-# Run installer
-bash "${BRANDING_DIR}/scripts/install-branding.sh"
-
-# Update XFCE4 skel to use Diyar theme
-SKEL_XFCE="/etc/skel/.config/xfce4/xfconf/xfce-perchannel-xml"
-
-# Patch xsettings to use our theme
-if [[ -f "${SKEL_XFCE}/xsettings.xml" ]]; then
-    sed -i 's/Arc-Dark/Diyar/g; s/Papirus-Dark/Diyar/g' \
-        "${SKEL_XFCE}/xsettings.xml"
-fi
-# Patch gtk3 settings.ini
-if [[ -f "/etc/skel/.config/gtk-3.0/settings.ini" ]]; then
-    sed -i 's/Arc-Dark/Diyar/g; s/Papirus-Dark/Diyar/g' \
-        "/etc/skel/.config/gtk-3.0/settings.ini"
+# ── Icon Theme ────────────────────────────────────────────────────────────────
+if [[ -d "${BRANDING_DIR}/icons" ]]; then
+    mkdir -p /usr/share/icons/Diyar
+    cp -r "${BRANDING_DIR}/icons/." /usr/share/icons/Diyar/
+    gtk-update-icon-cache -f -t /usr/share/icons/Diyar 2>/dev/null || true
+    echo "[DIYAR] ✅ Icon theme مثبّت"
 fi
 
-echo "[DIYAR] Branding installation complete."
+# ── Wallpapers ────────────────────────────────────────────────────────────────
+if [[ -d "${BRANDING_DIR}/wallpapers" ]]; then
+    mkdir -p /usr/share/diyar-os/wallpapers
+    cp -r "${BRANDING_DIR}/wallpapers/." /usr/share/diyar-os/wallpapers/
+    echo "[DIYAR] ✅ خلفيات مثبّتة"
+fi
+
+# ── Plymouth ──────────────────────────────────────────────────────────────────
+if [[ -d "${BRANDING_DIR}/plymouth/diyar-theme" ]]; then
+    mkdir -p /usr/share/plymouth/themes/diyar
+    cp -r "${BRANDING_DIR}/plymouth/diyar-theme/." \
+          /usr/share/plymouth/themes/diyar/
+    update-alternatives --install \
+        /usr/share/plymouth/themes/default.plymouth \
+        default.plymouth \
+        /usr/share/plymouth/themes/diyar/diyar.plymouth 100 \
+        2>/dev/null || true
+    echo "[DIYAR] ✅ Plymouth theme مثبّت"
+fi
+
+# ── GRUB Theme ────────────────────────────────────────────────────────────────
+if [[ -d "${BRANDING_DIR}/grub-theme" ]]; then
+    mkdir -p /usr/share/grub/themes/diyar
+    cp -r "${BRANDING_DIR}/grub-theme/." \
+          /usr/share/grub/themes/diyar/
+    echo "[DIYAR] ✅ GRUB theme مثبّت"
+fi
+
+# ── معالجة صور الخام بـ ImageMagick إن وجدت ─────────────────────────────────
+RAW_DIR="${BRANDING_DIR}/raw_images"
+if [[ -d "$RAW_DIR" ]] && command -v convert &>/dev/null; then
+    echo "[DIYAR] معالجة صور الخام..."
+    SCRIPT="${BRANDING_DIR}/scripts/build-icons.sh"
+    if [[ -f "$SCRIPT" ]]; then
+        bash "$SCRIPT"
+        echo "[DIYAR] ✅ الأيقونات المعالجة مثبّتة"
+    fi
+fi
+
+echo "[DIYAR] اكتملت الهوية البصرية ✅"
