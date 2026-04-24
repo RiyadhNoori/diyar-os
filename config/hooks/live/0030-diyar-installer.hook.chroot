@@ -1,56 +1,39 @@
 #!/bin/bash
-# =============================================================================
-# Diyar OS — Live Hook: Official Debian Installer
-# config/hooks/live/0030-diyar-installer.hook.chroot
-#
-# يستخدم debian-installer الرسمي — نفس الأداة التي تستخدمها
-# صور ديبيان الرسمية، مع مشغّل رسومي GTK
-# =============================================================================
 set -e
+echo "[DIYAR] تثبيت المثبّت الرسمي..."
 
-echo "[DIYAR] إعداد مثبّت النظام الرسمي..."
-
-# ── تثبيت مكوّنات المثبّت الرسمي ───────────────────────────────────────────
 DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     debian-installer-launcher \
-    localechooser-data \
+    policykit-1 \
+    libpolkit-gobject-1-0 \
     2>/dev/null || true
 
-# ── ملف إطلاق سطح المكتب ────────────────────────────────────────────────────
-mkdir -p /usr/share/applications
-cat > /usr/share/applications/debian-installer-launcher.desktop <<'DESKTOP'
-[Desktop Entry]
-Version=1.0
-Type=Application
-Name=Install Diyar OS
-Name[ar]=تثبيت نظام ديار
-GenericName=System Installer
-GenericName[ar]=مثبّت النظام
-Comment=Install Diyar OS to your hard drive using the official installer
-Comment[ar]=ثبّت نظام ديار على قرصك الصلب
-Exec=debian-installer-launcher
-Icon=debian-installer
-Terminal=false
-Categories=System;
-Keywords=install;setup;diyar;debian;
-StartupNotify=true
-DESKTOP
-
-# ── نسخ لسطح المكتب الافتراضي ───────────────────────────────────────────────
-mkdir -p /etc/skel/Desktop
-cp /usr/share/applications/debian-installer-launcher.desktop \
-   /etc/skel/Desktop/
-chmod +x /etc/skel/Desktop/debian-installer-launcher.desktop
-
-# ── صلاحيات PolicyKit ───────────────────────────────────────────────────────
+# PolicyKit rule
 mkdir -p /etc/polkit-1/rules.d
-cat > /etc/polkit-1/rules.d/49-debian-installer.rules <<'POLKIT'
+cat > /etc/polkit-1/rules.d/49-installer.rules << 'POLKIT'
 polkit.addRule(function(action, subject) {
-    if ((action.id === "org.freedesktop.policykit.exec") &&
-        subject.local && subject.active) {
+    if (subject.local && subject.active && subject.isInGroup("sudo")) {
         return polkit.Result.YES;
     }
 });
 POLKIT
 
-echo "[DIYAR] debian-installer-launcher مثبّت ✅"
+# Desktop launcher — uses pkexec correctly
+cat > /usr/share/applications/diyar-install.desktop << 'DESK'
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Install Diyar OS
+Name[ar]=تثبيت نظام ديار
+Exec=pkexec debian-installer-launcher
+Icon=system-software-install
+Terminal=false
+Categories=System;
+DESK
+
+mkdir -p /etc/skel/Desktop
+cp /usr/share/applications/diyar-install.desktop \
+   /etc/skel/Desktop/diyar-install.desktop
+chmod +x /etc/skel/Desktop/diyar-install.desktop
+
+echo "[DIYAR] المثبّت جاهز ✅"
