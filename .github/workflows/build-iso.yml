@@ -134,7 +134,7 @@ jobs:
 
     # Ubuntu 22.04 runner on Debian Bookworm base gives best live-build compat
     # We use ubuntu-latest but install Debian live-build tools explicitly
-    timeout-minutes: 120
+    timeout-minutes: 350
 
     permissions:
       contents: write    # needed to create releases
@@ -627,4 +627,3 @@ jobs:
             ${{ needs.build.outputs.iso_filename }}
             ${{ needs.build.outputs.iso_filename }}.sha256
           token: ${{ secrets.GITHUB_TOKEN }}
- 
