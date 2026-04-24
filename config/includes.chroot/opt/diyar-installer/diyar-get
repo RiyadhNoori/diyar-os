@@ -1,8 +1,17 @@
 #!/bin/bash
 # =============================================================================
 # diyar-get — مدير البرامج الإضافية لنظام ديار
-# الاستخدام: diyar-get
 # =============================================================================
+
+# تشغيل كـ root
+[[ $EUID -eq 0 ]] || exec sudo -E "$0" "$@"
+
+# ── إعداد اللغة والترميز ─────────────────────────────────────────────────────
+export LANG=ar_IQ.UTF-8
+export LC_ALL=ar_IQ.UTF-8
+export NCURSES_NO_UTF8_ACS=1
+
+T="Diyar Software Manager"
 
 export NEWT_COLORS='
 root=,black
@@ -17,213 +26,164 @@ acttextbox=yellow,black
 entry=white,black
 '
 
-T="ديار — مدير البرامج الإضافية"
-
-# ── فئات البرامج ───────────────────────────────────────────────────────────
+# ── قائمة البرامج ─────────────────────────────────────────────────────────────
 declare -A PKGS
 declare -A NAMES
 
-# ── مكتب واتصالات ──────────────────────────────────────────────────────────
-PKGS[calc]="libreoffice-calc libreoffice-impress libreoffice-draw libreoffice-math"
-NAMES[calc]="LibreOffice كامل (Calc + Impress + Draw)"
+# مكتب وتواصل
+PKGS[libreoffice_full]="libreoffice-calc libreoffice-impress libreoffice-draw"
+NAMES[libreoffice_full]="LibreOffice Full - Calc + Impress + Draw"
 
 PKGS[thunderbird]="thunderbird thunderbird-l10n-ar"
-NAMES[thunderbird]="Thunderbird — بريد إلكتروني"
+NAMES[thunderbird]="Thunderbird - Email Client"
 
-PKGS[teams]="libnotify4 libdbus-glib-1-2"
-NAMES[teams]="متطلبات Microsoft Teams (نسخة الويب موصى بها)"
-
-# ── تطوير وبرمجة ───────────────────────────────────────────────────────────
+# تطوير وبرمجة
 PKGS[vscode]="code"
-NAMES[vscode]="VS Code — محرر الكود الاحترافي"
+NAMES[vscode]="VS Code - Code Editor"
 
-PKGS[git]="git git-gui gitk meld"
-NAMES[git]="Git + واجهة رسومية + Meld للمقارنة"
+PKGS[git_tools]="git git-gui gitk meld"
+NAMES[git_tools]="Git + GUI Tools"
 
-PKGS[python]="python3-pip python3-venv python3-dev ipython3 jupyter"
-NAMES[python]="Python كامل + Jupyter Notebook"
+PKGS[python_dev]="python3-pip python3-venv python3-dev ipython3"
+NAMES[python_dev]="Python Dev + IPython"
 
 PKGS[docker]="docker.io docker-compose"
-NAMES[docker]="Docker + Docker Compose"
+NAMES[docker]="Docker + Compose"
 
 PKGS[nodejs]="nodejs npm"
 NAMES[nodejs]="Node.js + NPM"
 
-PKGS[cpp]="build-essential gcc g++ cmake gdb valgrind"
-NAMES[cpp]="C/C++ — مترجم + CMake + GDB"
+PKGS[cpp_dev]="build-essential gcc g++ cmake gdb"
+NAMES[cpp_dev]="C/C++ - GCC + CMake + GDB"
 
-PKGS[db]="sqlite3 sqlitebrowser postgresql-client mysql-client"
-NAMES[db]="قواعد بيانات — SQLite + PostgreSQL + MySQL clients"
+PKGS[db_tools]="sqlite3 sqlitebrowser postgresql-client"
+NAMES[db_tools]="Database Tools - SQLite + PostgreSQL"
 
-# ── تصميم وصور ─────────────────────────────────────────────────────────────
-PKGS[gimp]="gimp gimp-plugin-registry gimp-data-extras"
-NAMES[gimp]="GIMP — تحرير الصور (بديل Photoshop)"
+# تصميم ووسائط
+PKGS[gimp]="gimp"
+NAMES[gimp]="GIMP - Image Editor"
 
 PKGS[inkscape]="inkscape"
-NAMES[inkscape]="Inkscape — رسوميات متجهية (بديل Illustrator)"
+NAMES[inkscape]="Inkscape - Vector Graphics"
 
 PKGS[kdenlive]="kdenlive"
-NAMES[kdenlive]="Kdenlive — تحرير فيديو احترافي"
+NAMES[kdenlive]="Kdenlive - Video Editor"
 
 PKGS[obs]="obs-studio"
-NAMES[obs]="OBS Studio — تسجيل وبث مباشر"
+NAMES[obs]="OBS Studio - Screen Recorder"
 
 PKGS[blender]="blender"
-NAMES[blender]="Blender — نمذجة ثلاثية الأبعاد"
+NAMES[blender]="Blender - 3D Modelling"
 
-# ── شبكة وأمن ──────────────────────────────────────────────────────────────
-PKGS[wireshark]="wireshark tshark"
-NAMES[wireshark]="Wireshark — تحليل الشبكة"
-
-PKGS[nmap]="nmap zenmap"
-NAMES[nmap]="Nmap + Zenmap — فحص الشبكة"
-
-PKGS[vpn]="openvpn network-manager-openvpn-gnome wireguard"
-NAMES[vpn]="VPN — OpenVPN + WireGuard"
-
-PKGS[ssh]="openssh-server fail2ban ufw"
-NAMES[ssh]="خادم SSH + جدار حماية UFW + Fail2Ban"
-
-# ── وسائط متعددة ───────────────────────────────────────────────────────────
-PKGS[codecs]="ubuntu-restricted-extras ffmpeg gstreamer1.0-plugins-bad gstreamer1.0-libav"
-NAMES[codecs]="ترميزات الوسائط الكاملة (MP3, AAC, H.264...)"
-
-PKGS[spotify]="spotify-client"
-NAMES[spotify]="Spotify — موسيقى"
+PKGS[codecs]="ffmpeg gstreamer1.0-plugins-bad gstreamer1.0-libav"
+NAMES[codecs]="Media Codecs - MP3 H264 AAC"
 
 PKGS[handbrake]="handbrake"
-NAMES[handbrake]="HandBrake — تحويل صيغ الفيديو"
+NAMES[handbrake]="HandBrake - Video Converter"
 
-# ── أدوات النظام ───────────────────────────────────────────────────────────
+# شبكة وأمن
+PKGS[wireshark]="wireshark tshark"
+NAMES[wireshark]="Wireshark - Network Analyzer"
+
+PKGS[nmap]="nmap"
+NAMES[nmap]="Nmap - Network Scanner"
+
+PKGS[vpn]="openvpn network-manager-openvpn-gnome wireguard"
+NAMES[vpn]="VPN - OpenVPN + WireGuard"
+
+PKGS[ssh_server]="openssh-server ufw fail2ban"
+NAMES[ssh_server]="SSH Server + UFW Firewall"
+
+# أدوات النظام
 PKGS[timeshift]="timeshift"
-NAMES[timeshift]="Timeshift — نسخ احتياطي للنظام"
-
-PKGS[gparted]="gparted"
-NAMES[gparted]="GParted — إدارة الأقسام"
+NAMES[timeshift]="Timeshift - System Backup"
 
 PKGS[bleachbit]="bleachbit"
-NAMES[bleachbit]="BleachBit — تنظيف النظام (بديل CCleaner)"
-
-PKGS[stacer]="stacer"
-NAMES[stacer]="Stacer — مراقبة وتحسين النظام"
+NAMES[bleachbit]="BleachBit - System Cleaner"
 
 PKGS[virtualbox]="virtualbox virtualbox-qt"
-NAMES[virtualbox]="VirtualBox — محاكي الأجهزة الافتراضية"
+NAMES[virtualbox]="VirtualBox - Virtual Machines"
 
-# ── بناء القائمة للعرض ────────────────────────────────────────────────────
-build_menu() {
-    local category="$1"
-    local items=()
-    for key in "${!NAMES[@]}"; do
-        # تصفية حسب الفئة
-        case "$category" in
-            office)   [[ "$key" =~ ^(calc|thunderbird|teams)$ ]] || continue ;;
-            dev)      [[ "$key" =~ ^(vscode|git|python|docker|nodejs|cpp|db)$ ]] || continue ;;
-            media)    [[ "$key" =~ ^(gimp|inkscape|kdenlive|obs|blender|codecs|spotify|handbrake)$ ]] || continue ;;
-            network)  [[ "$key" =~ ^(wireshark|nmap|vpn|ssh)$ ]] || continue ;;
-            system)   [[ "$key" =~ ^(timeshift|gparted|bleachbit|stacer|virtualbox)$ ]] || continue ;;
-        esac
-        items+=("$key" "${NAMES[$key]}" "OFF")
-    done
-    echo "${items[@]}"
-}
+PKGS[gparted]="gparted"
+NAMES[gparted]="GParted - Partition Manager"
 
-install_packages() {
-    local selected="$1"
-    local to_install=""
+# ── بناء قائمة العرض ──────────────────────────────────────────────────────────
+ALL_ITEMS=()
+for key in "${!NAMES[@]}"; do
+    ALL_ITEMS+=("$key" "${NAMES[$key]}" "OFF")
+done
 
-    for key in $selected; do
-        to_install+=" ${PKGS[$key]}"
-    done
-
-    [[ -z "$to_install" ]] && return
-
-    # إضافة مستودع VS Code إذا طُلب
-    if [[ "$selected" == *"vscode"* ]]; then
-        wget -qO- https://packages.microsoft.com/keys/microsoft.asc \
-            | gpg --dearmor > /tmp/microsoft.gpg
-        install -D -o root -g root -m 644 \
-            /tmp/microsoft.gpg /etc/apt/keyrings/microsoft.gpg
-        echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/microsoft.gpg] \
-            https://packages.microsoft.com/repos/code stable main" \
-            > /etc/apt/sources.list.d/vscode.list
-    fi
-
-    # إضافة مستودع Spotify إذا طُلب
-    if [[ "$selected" == *"spotify"* ]]; then
-        curl -sS https://download.spotify.com/debian/pubkey_6224F9941A8AA6D1.gpg \
-            | gpg --dearmor \
-            | tee /etc/apt/keyrings/spotify.gpg > /dev/null
-        echo "deb [signed-by=/etc/apt/keyrings/spotify.gpg] \
-            http://repository.spotify.com stable non-free" \
-            | tee /etc/apt/sources.list.d/spotify.list
-    fi
-
-    (
-    echo "2";  echo "XXX"; echo "تحديث قائمة الحزم..."; echo "XXX"
-    apt-get update -qq 2>&1 | tail -3
-
-    echo "20"; echo "XXX"; echo "جاري التثبيت..."; echo "XXX"
-    DEBIAN_FRONTEND=noninteractive apt-get install -y $to_install 2>&1
-
-    echo "100"; echo "XXX"; echo "اكتمل التثبيت!"; echo "XXX"
-    ) | whiptail --title "$T" --gauge "جاري تثبيت البرامج..." 8 62 0
-}
-
-# ═══════════════════════════════════════════════════════════════════
-# القائمة الرئيسية
-# ═══════════════════════════════════════════════════════════════════
-
-[[ $EUID -eq 0 ]] || exec sudo "$0" "$@"
-
+# ── القائمة الرئيسية ──────────────────────────────────────────────────────────
 while true; do
     CATEGORY=$(whiptail --title "$T" --menu \
-"اختر فئة البرامج التي تريد تثبيتها:
-───────────────────────────────────────" \
+        "Select software category:" \
         18 65 7 \
-        "office"  "📄  مكتب وتواصل" \
-        "dev"     "💻  تطوير وبرمجة" \
-        "media"   "🎨  تصميم ووسائط" \
-        "network" "🔒  شبكة وأمن" \
-        "system"  "⚙   أدوات النظام" \
-        "all"     "📦  عرض الكل" \
-        "exit"    "🚪  خروج" \
+        "office"  "Office & Communication" \
+        "dev"     "Development & Programming" \
+        "media"   "Design & Media" \
+        "network" "Network & Security" \
+        "system"  "System Tools" \
+        "all"     "Show All" \
+        "exit"    "Exit" \
         3>&1 1>&2 2>&3) || break
 
     [[ "$CATEGORY" == "exit" ]] && break
 
-    if [[ "$CATEGORY" == "all" ]]; then
-        # عرض جميع البرامج
-        ALL_ITEMS=()
-        for key in "${!NAMES[@]}"; do
-            ALL_ITEMS+=("$key" "${NAMES[$key]}" "OFF")
-        done
-        SELECTED=$(whiptail --title "$T" \
-            --checklist "اختر البرامج (Space للتحديد):" \
-            24 72 16 "${ALL_ITEMS[@]}" \
-            3>&1 1>&2 2>&3) || continue
-    else
-        MENU_ITEMS=($(build_menu "$CATEGORY"))
-        [[ ${#MENU_ITEMS[@]} -eq 0 ]] && continue
-        SELECTED=$(whiptail --title "$T" \
-            --checklist "اختر البرامج (Space للتحديد):" \
-            20 72 12 "${MENU_ITEMS[@]}" \
-            3>&1 1>&2 2>&3) || continue
-    fi
+    # تصفية حسب الفئة
+    FILTERED=()
+    for key in "${!NAMES[@]}"; do
+        case "$CATEGORY" in
+            office)  [[ "$key" =~ ^(libreoffice_full|thunderbird)$ ]] || continue ;;
+            dev)     [[ "$key" =~ ^(vscode|git_tools|python_dev|docker|nodejs|cpp_dev|db_tools)$ ]] || continue ;;
+            media)   [[ "$key" =~ ^(gimp|inkscape|kdenlive|obs|blender|codecs|handbrake)$ ]] || continue ;;
+            network) [[ "$key" =~ ^(wireshark|nmap|vpn|ssh_server)$ ]] || continue ;;
+            system)  [[ "$key" =~ ^(timeshift|bleachbit|virtualbox|gparted)$ ]] || continue ;;
+            all)     ;;
+        esac
+        FILTERED+=("$key" "${NAMES[$key]}" "OFF")
+    done
+
+    [[ ${#FILTERED[@]} -eq 0 ]] && continue
+
+    SELECTED=$(whiptail --title "$T" \
+        --checklist "Select packages (Space to select, Enter to confirm):" \
+        22 70 14 "${FILTERED[@]}" \
+        3>&1 1>&2 2>&3) || continue
 
     [[ -z "$SELECTED" ]] && continue
 
-    # تأكيد التثبيت
+    # تجميع الحزم
+    TO_INSTALL=""
     SELECTED_CLEAN=$(echo "$SELECTED" | tr -d '"')
-    COUNT=$(echo "$SELECTED_CLEAN" | wc -w)
+    for key in $SELECTED_CLEAN; do
+        TO_INSTALL+=" ${PKGS[$key]}"
+    done
+
+    [[ -z "$TO_INSTALL" ]] && continue
 
     whiptail --title "$T" --yesno \
-        "سيتم تثبيت $COUNT برنامج.\nهل تريد المتابعة؟" \
-        8 45 || continue
+        "Install selected packages?\n\n$TO_INSTALL" \
+        12 65 || continue
 
-    install_packages "$SELECTED_CLEAN"
+    # إضافة مستودع VS Code
+    if [[ "$SELECTED_CLEAN" == *"vscode"* ]]; then
+        wget -qO- https://packages.microsoft.com/keys/microsoft.asc \
+            | gpg --dearmor > /etc/apt/keyrings/microsoft.gpg 2>/dev/null || true
+        echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/microsoft.gpg] https://packages.microsoft.com/repos/code stable main" \
+            > /etc/apt/sources.list.d/vscode.list 2>/dev/null || true
+    fi
+
+    (
+        echo "10"; echo "XXX"; echo "Updating package list..."; echo "XXX"
+        apt-get update -qq 2>/dev/null
+
+        echo "30"; echo "XXX"; echo "Installing packages..."; echo "XXX"
+        DEBIAN_FRONTEND=noninteractive apt-get install -y $TO_INSTALL 2>/dev/null
+
+        echo "100"; echo "XXX"; echo "Done!"; echo "XXX"
+    ) | whiptail --title "$T" --gauge "Installing..." 8 60 0
 
     whiptail --title "$T" --msgbox \
-        "✅ اكتمل التثبيت بنجاح!\n\nيمكنك إيجاد البرامج في قائمة التطبيقات." \
-        10 55
+        "Installation complete!\nFind apps in the application menu." \
+        9 52
 done
