@@ -1,45 +1,49 @@
 #!/bin/bash
 # =============================================================================
-# diyar-get — مدير البرامج الإضافية لنظام ديار
+# diyar-get — Diyar Software Manager
 # =============================================================================
 
-# تشغيل كـ root
 [[ $EUID -eq 0 ]] || exec sudo -E "$0" "$@"
 
-# ── إعداد اللغة والترميز ─────────────────────────────────────────────────────
-export LANG=ar_IQ.UTF-8
-export LC_ALL=ar_IQ.UTF-8
-export NCURSES_NO_UTF8_ACS=1
+export LANG=en_US.UTF-8
+export LC_ALL=en_US.UTF-8
+export TERM=xterm-256color
 
 T="Diyar Software Manager"
 
 export NEWT_COLORS='
-root=,black
-border=white,black
-title=brightcyan,black
-button=black,brightcyan
+root=brightwhite,black
+window=brightwhite,black
+border=cyan,black
+title=black,cyan
+button=black,cyan
 actbutton=black,yellow
-listbox=white,black
-actlistbox=yellow,black
-textbox=white,black
-acttextbox=yellow,black
-entry=white,black
+compactbutton=brightwhite,black
+listbox=brightwhite,black
+actlistbox=black,cyan
+textbox=brightwhite,black
+acttextbox=black,yellow
+entry=black,brightwhite
+disentry=gray,black
+checkbox=brightwhite,black
+actcheckbox=black,yellow
+emptyscale=,black
+fullscale=cyan,black
+helpline=black,cyan
+roottext=cyan,black
 '
 
-# ── قائمة البرامج ─────────────────────────────────────────────────────────────
-declare -A PKGS
-declare -A NAMES
+# ── Software list ─────────────────────────────────────────────────────────────
+declare -A PKGS NAMES
 
-# مكتب وتواصل
 PKGS[libreoffice_full]="libreoffice-calc libreoffice-impress libreoffice-draw"
-NAMES[libreoffice_full]="LibreOffice Full - Calc + Impress + Draw"
+NAMES[libreoffice_full]="LibreOffice Full (Calc + Impress + Draw)"
 
 PKGS[thunderbird]="thunderbird thunderbird-l10n-ar"
-NAMES[thunderbird]="Thunderbird - Email Client"
+NAMES[thunderbird]="Thunderbird (Email Client)"
 
-# تطوير وبرمجة
 PKGS[vscode]="code"
-NAMES[vscode]="VS Code - Code Editor"
+NAMES[vscode]="VS Code (Code Editor)"
 
 PKGS[git_tools]="git git-gui gitk meld"
 NAMES[git_tools]="Git + GUI Tools"
@@ -54,91 +58,81 @@ PKGS[nodejs]="nodejs npm"
 NAMES[nodejs]="Node.js + NPM"
 
 PKGS[cpp_dev]="build-essential gcc g++ cmake gdb"
-NAMES[cpp_dev]="C/C++ - GCC + CMake + GDB"
+NAMES[cpp_dev]="C/C++ (GCC + CMake + GDB)"
 
 PKGS[db_tools]="sqlite3 sqlitebrowser postgresql-client"
-NAMES[db_tools]="Database Tools - SQLite + PostgreSQL"
+NAMES[db_tools]="Database Tools"
 
-# تصميم ووسائط
 PKGS[gimp]="gimp"
-NAMES[gimp]="GIMP - Image Editor"
+NAMES[gimp]="GIMP (Image Editor)"
 
 PKGS[inkscape]="inkscape"
-NAMES[inkscape]="Inkscape - Vector Graphics"
+NAMES[inkscape]="Inkscape (Vector Graphics)"
 
 PKGS[kdenlive]="kdenlive"
-NAMES[kdenlive]="Kdenlive - Video Editor"
+NAMES[kdenlive]="Kdenlive (Video Editor)"
 
 PKGS[obs]="obs-studio"
-NAMES[obs]="OBS Studio - Screen Recorder"
+NAMES[obs]="OBS Studio (Screen Recorder)"
 
 PKGS[blender]="blender"
-NAMES[blender]="Blender - 3D Modelling"
+NAMES[blender]="Blender (3D Modelling)"
 
 PKGS[codecs]="ffmpeg gstreamer1.0-plugins-bad gstreamer1.0-libav"
-NAMES[codecs]="Media Codecs - MP3 H264 AAC"
+NAMES[codecs]="Media Codecs (MP3 H264 AAC)"
 
 PKGS[handbrake]="handbrake"
-NAMES[handbrake]="HandBrake - Video Converter"
+NAMES[handbrake]="HandBrake (Video Converter)"
 
-# شبكة وأمن
 PKGS[wireshark]="wireshark tshark"
-NAMES[wireshark]="Wireshark - Network Analyzer"
+NAMES[wireshark]="Wireshark (Network Analyzer)"
 
 PKGS[nmap]="nmap"
-NAMES[nmap]="Nmap - Network Scanner"
+NAMES[nmap]="Nmap (Network Scanner)"
 
 PKGS[vpn]="openvpn network-manager-openvpn-gnome wireguard"
-NAMES[vpn]="VPN - OpenVPN + WireGuard"
+NAMES[vpn]="VPN (OpenVPN + WireGuard)"
 
 PKGS[ssh_server]="openssh-server ufw fail2ban"
 NAMES[ssh_server]="SSH Server + UFW Firewall"
 
-# أدوات النظام
 PKGS[timeshift]="timeshift"
-NAMES[timeshift]="Timeshift - System Backup"
+NAMES[timeshift]="Timeshift (System Backup)"
 
 PKGS[bleachbit]="bleachbit"
-NAMES[bleachbit]="BleachBit - System Cleaner"
+NAMES[bleachbit]="BleachBit (System Cleaner)"
 
 PKGS[virtualbox]="virtualbox virtualbox-qt"
-NAMES[virtualbox]="VirtualBox - Virtual Machines"
+NAMES[virtualbox]="VirtualBox (Virtual Machines)"
 
 PKGS[gparted]="gparted"
-NAMES[gparted]="GParted - Partition Manager"
+NAMES[gparted]="GParted (Partition Manager)"
 
-# ── بناء قائمة العرض ──────────────────────────────────────────────────────────
-ALL_ITEMS=()
-for key in "${!NAMES[@]}"; do
-    ALL_ITEMS+=("$key" "${NAMES[$key]}" "OFF")
-done
-
-# ── القائمة الرئيسية ──────────────────────────────────────────────────────────
+# ── Main loop ─────────────────────────────────────────────────────────────────
 while true; do
-    CATEGORY=$(whiptail --title "$T" --menu \
-        "Select software category:" \
-        18 65 7 \
-        "office"  "Office & Communication" \
-        "dev"     "Development & Programming" \
-        "media"   "Design & Media" \
-        "network" "Network & Security" \
-        "system"  "System Tools" \
-        "all"     "Show All" \
-        "exit"    "Exit" \
+    CATEGORY=$(whiptail --title "$T" \
+        --menu "\nChoose a software category:\n" \
+        20 60 8 \
+        "1" "  Office & Communication" \
+        "2" "  Development & Programming" \
+        "3" "  Design & Media" \
+        "4" "  Network & Security" \
+        "5" "  System Tools" \
+        "6" "  Show All" \
+        "0" "  Exit" \
         3>&1 1>&2 2>&3) || break
 
-    [[ "$CATEGORY" == "exit" ]] && break
+    [[ "$CATEGORY" == "0" ]] && break
 
-    # تصفية حسب الفئة
     FILTERED=()
     for key in "${!NAMES[@]}"; do
         case "$CATEGORY" in
-            office)  [[ "$key" =~ ^(libreoffice_full|thunderbird)$ ]] || continue ;;
-            dev)     [[ "$key" =~ ^(vscode|git_tools|python_dev|docker|nodejs|cpp_dev|db_tools)$ ]] || continue ;;
-            media)   [[ "$key" =~ ^(gimp|inkscape|kdenlive|obs|blender|codecs|handbrake)$ ]] || continue ;;
-            network) [[ "$key" =~ ^(wireshark|nmap|vpn|ssh_server)$ ]] || continue ;;
-            system)  [[ "$key" =~ ^(timeshift|bleachbit|virtualbox|gparted)$ ]] || continue ;;
-            all)     ;;
+            1) [[ "$key" =~ ^(libreoffice_full|thunderbird)$ ]]           || continue ;;
+            2) [[ "$key" =~ ^(vscode|git_tools|python_dev|docker|nodejs|cpp_dev|db_tools)$ ]] || continue ;;
+            3) [[ "$key" =~ ^(gimp|inkscape|kdenlive|obs|blender|codecs|handbrake)$ ]] || continue ;;
+            4) [[ "$key" =~ ^(wireshark|nmap|vpn|ssh_server)$ ]]           || continue ;;
+            5) [[ "$key" =~ ^(timeshift|bleachbit|virtualbox|gparted)$ ]]  || continue ;;
+            6) ;;
         esac
         FILTERED+=("$key" "${NAMES[$key]}" "OFF")
     done
@@ -146,30 +140,29 @@ while true; do
     [[ ${#FILTERED[@]} -eq 0 ]] && continue
 
     SELECTED=$(whiptail --title "$T" \
-        --checklist "Select packages (Space to select, Enter to confirm):" \
-        22 70 14 "${FILTERED[@]}" \
+        --checklist "\nSelect packages  [Space = select,  Enter = install]\n" \
+        24 65 14 \
+        "${FILTERED[@]}" \
         3>&1 1>&2 2>&3) || continue
 
     [[ -z "$SELECTED" ]] && continue
 
-    # تجميع الحزم
     TO_INSTALL=""
-    SELECTED_CLEAN=$(echo "$SELECTED" | tr -d '"')
-    for key in $SELECTED_CLEAN; do
+    for key in $(echo "$SELECTED" | tr -d '"'); do
         TO_INSTALL+=" ${PKGS[$key]}"
     done
-
     [[ -z "$TO_INSTALL" ]] && continue
 
     whiptail --title "$T" --yesno \
-        "Install selected packages?\n\n$TO_INSTALL" \
-        12 65 || continue
+        "\nReady to install:\n${TO_INSTALL}\n\nProceed?" \
+        14 65 || continue
 
-    # إضافة مستودع VS Code
-    if [[ "$SELECTED_CLEAN" == *"vscode"* ]]; then
+    # VS Code repo
+    if echo "$SELECTED" | grep -q "vscode"; then
         wget -qO- https://packages.microsoft.com/keys/microsoft.asc \
             | gpg --dearmor > /etc/apt/keyrings/microsoft.gpg 2>/dev/null || true
-        echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/microsoft.gpg] https://packages.microsoft.com/repos/code stable main" \
+        echo "deb [arch=amd64 signed-by=/etc/apt/keyrings/microsoft.gpg] \
+https://packages.microsoft.com/repos/code stable main" \
             > /etc/apt/sources.list.d/vscode.list 2>/dev/null || true
     fi
 
@@ -177,13 +170,14 @@ while true; do
         echo "10"; echo "XXX"; echo "Updating package list..."; echo "XXX"
         apt-get update -qq 2>/dev/null
 
-        echo "30"; echo "XXX"; echo "Installing packages..."; echo "XXX"
+        echo "25"; echo "XXX"; echo "Installing..."; echo "XXX"
         DEBIAN_FRONTEND=noninteractive apt-get install -y $TO_INSTALL 2>/dev/null
 
         echo "100"; echo "XXX"; echo "Done!"; echo "XXX"
-    ) | whiptail --title "$T" --gauge "Installing..." 8 60 0
+    ) | whiptail --title "$T" \
+        --gauge "\nInstalling packages, please wait...\n" 10 60 0
 
     whiptail --title "$T" --msgbox \
-        "Installation complete!\nFind apps in the application menu." \
-        9 52
+        "\n  Installation complete!\n\n  Find your apps in the application menu.\n" \
+        11 50
 done
