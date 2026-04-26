@@ -1,12 +1,15 @@
 # =============================================================================
 # Diyar OS — المثبّت وأدوات الصور
 # config/package-lists/06-installer.list.chroot
+# استخدام debian-installer-launcher الرسمي بدلاً من Calamares
 # =============================================================================
 
-# المثبّت الرسمي — localechooser-data محذوف (غير موجود في Bookworm)
+# المثبّت الرسمي من ديبيان
 debian-installer-launcher
+policykit-1
+libpolkit-gobject-1-0
 
-# ImageMagick
+# ImageMagick لمعالجة الصور
 imagemagick
 imagemagick-common
 
@@ -17,7 +20,7 @@ e2fsprogs
 dosfstools
 uuid-runtime
 
-# Grub tools فقط (بدون تعارض)
+# Grub tools
 grub-common
 grub2-common
 grub-pc-bin
