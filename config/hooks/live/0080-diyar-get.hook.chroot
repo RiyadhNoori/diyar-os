@@ -1,24 +1,26 @@
 #!/bin/bash
 set -e
-echo "[DIYAR] تثبيت diyar-get..."
+echo "[DIYAR] Installing diyar-get..."
 
 install -Dm755 /opt/diyar-installer/diyar-get /usr/local/bin/diyar-get
 
-# أيقونة سطح المكتب
 cat > /usr/share/applications/diyar-get.desktop << 'DESK'
 [Desktop Entry]
 Version=1.0
 Type=Application
 Name=Diyar Software Manager
 Name[ar]=مدير برامج ديار
-Comment[ar]=تثبيت برامج إضافية بسهولة
-Exec=xterm -fa "Monospace" -fs 11 -bg "#0D1525" -fg "#C8D4E8" -title "مدير برامج ديار" -e "diyar-get"
+Comment=Install additional software
+Comment[ar]=تثبيت برامج إضافية
+Exec=xfce4-terminal --title="Diyar Software Manager" --geometry=80x28 --font="Monospace 13" --zoom=1 --hide-scrollbar --hide-menubar -e "diyar-get"
 Icon=system-software-install
 Terminal=false
 Categories=System;PackageManager;
 DESK
 
 mkdir -p /etc/skel/Desktop
-cp /usr/share/applications/diyar-get.desktop /etc/skel/Desktop/
+cp /usr/share/applications/diyar-get.desktop \
+   /etc/skel/Desktop/diyar-get.desktop
+chmod +x /etc/skel/Desktop/diyar-get.desktop
 
-echo "[DIYAR] diyar-get مثبّت ✅"
+echo "[DIYAR] diyar-get installed ✅"
