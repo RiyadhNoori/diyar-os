@@ -230,6 +230,9 @@ rsync_system() {
         # Diyar installer itself (not needed on installed system)
         --exclude="/opt/diyar-installer/*"
         --exclude="/usr/local/sbin/diyar-installer"
+        # Avoid recursive copy into installation target mountpoint
+        --exclude="/target"
+        --exclude="/target/*"
         # Machine-specific live state
         --exclude="/etc/machine-id"
         --exclude="/var/lib/dbus/machine-id"

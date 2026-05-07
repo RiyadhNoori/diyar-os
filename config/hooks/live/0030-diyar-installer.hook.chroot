@@ -1,39 +1,85 @@
 #!/bin/bash
+# =============================================================================
+# Diyar OS — Live Hook: Official Debian Installer
+# config/hooks/live/0030-diyar-installer.hook.chroot
+#
+# يستخدم debian-installer الرسمي — نفس الأداة التي تستخدمها
+# صور ديبيان الرسمية، مع مشغّل رسومي GTK
+# =============================================================================
 set -e
-echo "[DIYAR] تثبيت المثبّت الرسمي..."
 
+echo "[DIYAR] إعداد مثبّت النظام الرسمي..."
+
+# ── تثبيت مكوّنات المثبّت الرسمي ───────────────────────────────────────────
 DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
     debian-installer-launcher \
-    policykit-1 \
-    libpolkit-gobject-1-0 \
+    localechooser-data \
     2>/dev/null || true
 
-# PolicyKit rule
-mkdir -p /etc/polkit-1/rules.d
-cat > /etc/polkit-1/rules.d/49-installer.rules << 'POLKIT'
-polkit.addRule(function(action, subject) {
-    if (subject.local && subject.active && subject.isInGroup("sudo")) {
-        return polkit.Result.YES;
-    }
-});
-POLKIT
-
-# Desktop launcher — uses pkexec correctly
-cat > /usr/share/applications/diyar-install.desktop << 'DESK'
+# ── ملف إطلاق سطح المكتب ────────────────────────────────────────────────────
+mkdir -p /usr/share/applications
+cat > /usr/share/applications/debian-installer-launcher.desktop <<'DESKTOP'
 [Desktop Entry]
 Version=1.0
 Type=Application
 Name=Install Diyar OS
 Name[ar]=تثبيت نظام ديار
-Exec=pkexec debian-installer-launcher
-Icon=system-software-install
+GenericName=System Installer
+GenericName[ar]=مثبّت النظام
+Comment=Install Diyar OS to your hard drive using the official installer
+Comment[ar]=ثبّت نظام ديار على قرصك الصلب
+Exec=debian-installer-launcher
+Icon=debian-installer
 Terminal=false
 Categories=System;
-DESK
+Keywords=install;setup;diyar;debian;
+StartupNotify=true
+DESKTOP
 
+# ── نسخ لسطح المكتب الافتراضي ───────────────────────────────────────────────
 mkdir -p /etc/skel/Desktop
-cp /usr/share/applications/diyar-install.desktop \
-   /etc/skel/Desktop/diyar-install.desktop
-chmod +x /etc/skel/Desktop/diyar-install.desktop
+cp /usr/share/applications/debian-installer-launcher.desktop \
+   /etc/skel/Desktop/
+chmod +x /etc/skel/Desktop/debian-installer-launcher.desktop
 
-echo "[DIYAR] المثبّت جاهز ✅"
+# ── تثبيت المثبّت المخصص الخاص بديار إذا كان موجوداً في /opt/diyar-installer
+if [[ -d /opt/diyar-installer ]]; then
+    echo "[DIYAR] Installing custom Diyar Installer..."
+    install -d /usr/local/sbin /usr/local/lib/diyar-installer /usr/local/lib/diyar-installer/core \
+            /usr/local/lib/diyar-installer/ui /usr/local/lib/diyar-installer/hooks/post-install \
+            /usr/local/lib/diyar-installer/conf /etc/diyar-installer /usr/share/applications
+
+    install -m755 /opt/diyar-installer/core/engine.sh /usr/local/lib/diyar-installer/core/engine.sh
+    install -m644 /opt/diyar-installer/core/disk.sh /usr/local/lib/diyar-installer/core/disk.sh
+    install -m644 /opt/diyar-installer/core/chroot_setup.sh /usr/local/lib/diyar-installer/core/chroot_setup.sh
+    install -m644 /opt/diyar-installer/core/log.sh /usr/local/lib/diyar-installer/core/log.sh
+    install -m755 /opt/diyar-installer/ui/diyar-installer /usr/local/lib/diyar-installer/ui/diyar-installer
+    install -m755 /opt/diyar-installer/hooks/post-install/01-arabic-setup.sh \
+            /usr/local/lib/diyar-installer/hooks/post-install/01-arabic-setup.sh
+    install -m644 /opt/diyar-installer/conf/installer.conf /etc/diyar-installer/installer.conf
+    ln -sf /usr/local/lib/diyar-installer/ui/diyar-installer /usr/local/sbin/diyar-installer
+    install -m644 /opt/diyar-installer/diyar-install.desktop /usr/share/applications/diyar-install.desktop
+    cp /usr/share/applications/diyar-install.desktop /etc/skel/Desktop/
+    chmod +x /etc/skel/Desktop/diyar-install.desktop
+    echo "[DIYAR] Custom Diyar Installer installed ✅"
+fi
+
+# ── صلاحيات PolicyKit ───────────────────────────────────────────────────────
+mkdir -p /etc/polkit-1/rules.d
+cat > /etc/polkit-1/rules.d/49-debian-installer.rules <<'POLKIT'
+polkit.addRule(function(action, subject) {
+    var program = action.lookup("program");
+    var isInstallerProgram =
+        (program === "/usr/local/sbin/diyar-installer") ||
+        (program === "/usr/bin/debian-installer-launcher");
+
+    if ((action.id === "org.freedesktop.policykit.exec") &&
+        isInstallerProgram &&
+        subject.local && subject.active &&
+        subject.isInGroup("sudo")) {
+        return polkit.Result.YES;
+    }
+});
+POLKIT
+
+echo "[DIYAR] debian-installer-launcher مثبّت ✅"
