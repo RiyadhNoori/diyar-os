@@ -258,7 +258,8 @@ jobs:
             librsvg2-bin \
             wget \
             git \
-            ovmf
+            ovmf \
+            imagemagick
 
           # ── Verify the keyring file exists
           echo "--- Checking keyring ---"
@@ -356,6 +357,328 @@ jobs:
           EOF
 
           echo "Version metadata injected: ${VERSION}"
+
+      # ── Build & inject branding (icons + wallpapers) ─────────────────────────
+      - name: Build and inject branding assets
+        run: |
+          echo "=== Running build-icons.sh ==="
+
+          # ── Fix the typo: repo folder is 'asstets' not 'assets' ──────────────
+          # build-icons.sh looks for ASSETS_DIR="${ROOT_DIR}/assets"
+          # The real folder is 'asstets' — create a symlink so the script finds it
+          if [[ -d "asstets" && ! -d "assets" ]]; then
+            ln -s "$(pwd)/asstets" "$(pwd)/assets"
+            echo "Symlink created: assets → asstets"
+          fi
+
+          # Ensure the script is executable
+          chmod +x scripts/build-icons.sh
+
+          # Run the icon/wallpaper builder
+          bash scripts/build-icons.sh
+
+          # ── Copy icon theme into live-build includes ──────────────────────────
+          # live-build copies config/includes.chroot/* verbatim into the ISO root.
+          # diyar-icons/ lives at the repo root — copy it to where live-build reads.
+          ICON_DEST="config/includes.chroot/usr/share/icons/Diyar"
+          mkdir -p "$ICON_DEST"
+          if [[ -d "diyar-icons" ]]; then
+            cp -r diyar-icons/. "$ICON_DEST/"
+            echo "Icons copied from diyar-icons/: $(find "$ICON_DEST" -name "*.png" | wc -l) PNG files"
+          else
+            echo "WARNING: diyar-icons/ not found at repo root — skipping icon copy"
+          fi
+
+          # ── Copy wallpapers ───────────────────────────────────────────────────
+          # build-icons.sh writes wallpapers/ relative to ROOT_DIR
+          WALL_SRC="$(find . -type d -name "wallpapers" | grep -v "includes.chroot" | head -1)"
+          if [[ -n "$WALL_SRC" ]]; then
+            WALL_DEST="config/includes.chroot/usr/share/diyar-os/wallpapers"
+            mkdir -p "$WALL_DEST"
+            cp -r "${WALL_SRC}/." "$WALL_DEST/"
+            echo "Wallpapers copied: $(ls "$WALL_DEST" | wc -l) files"
+          else
+            echo "WARNING: wallpapers/ not found after build-icons.sh — skipping"
+          fi
+
+          # ── Copy logo to pixmaps ──────────────────────────────────────────────
+          LOGO="$(find . -path "*/output/logo/diyar-logo-256.png" | head -1)"
+          if [[ -n "$LOGO" ]]; then
+            mkdir -p config/includes.chroot/usr/share/pixmaps
+            cp "$LOGO" config/includes.chroot/usr/share/pixmaps/diyar-logo.png
+            echo "Logo copied: $LOGO"
+          fi
+
+          # ── Set Diyar icon theme as default in XFCE4 ─────────────────────────
+          XFCE_DIR="config/includes.chroot/etc/xdg/xfce4/xfconf/xfce-perchannel-xml"
+          mkdir -p "$XFCE_DIR"
+          # Only write if not already present
+          if [[ ! -f "${XFCE_DIR}/xsettings.xml" ]]; then
+            cat > "${XFCE_DIR}/xsettings.xml" <<'XFCEEOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <channel name="xsettings" version="1.0">
+            <property name="Net" type="empty">
+              <property name="IconThemeName" type="string" value="Diyar"/>
+              <property name="ThemeName"     type="string" value="Adwaita-dark"/>
+            </property>
+          </channel>
+          XFCEEOF
+            echo "XFCE4 icon theme default set to Diyar"
+          else
+            # Patch the existing file to set the icon theme
+            sed -i 's/value="[^"]*"\s*\/>\s*<!-- IconThemeName -->/value="Diyar"\/>/' \
+              "${XFCE_DIR}/xsettings.xml" || true
+            echo "XFCE4 xsettings.xml already exists — patched icon theme"
+          fi
+
+          # ── Register wallpaper with XFCE4 ────────────────────────────────────
+          if [[ ! -f "${XFCE_DIR}/xfce4-desktop.xml" ]]; then
+            cat > "${XFCE_DIR}/xfce4-desktop.xml" <<'WPEOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <channel name="xfce4-desktop" version="1.0">
+            <property name="backdrop" type="empty">
+              <property name="screen0" type="empty">
+                <property name="monitorVirtual1" type="empty">
+                  <property name="workspace0" type="empty">
+                    <property name="image-path" type="string"
+                      value="/usr/share/diyar-os/wallpapers/diyar-default-1920x1080.jpg"/>
+                    <property name="image-style" type="int" value="5"/>
+                  </property>
+                </property>
+              </property>
+            </property>
+          </channel>
+          WPEOF
+            echo "XFCE4 wallpaper default configured"
+          fi
+
+          echo "=== Branding injection complete ==="
+          echo "Icons : $(find config/includes.chroot/usr/share/icons/Diyar -name '*.png' 2>/dev/null | wc -l) files"
+          echo "Walls : $(ls config/includes.chroot/usr/share/diyar-os/wallpapers/ 2>/dev/null | wc -l) files"
+
+      # ── Set up Calamares installer ────────────────────────────────────────────
+      - name: Set up Calamares installer
+        run: |
+          echo "=== Configuring Calamares ==="
+
+          # ── 1. Install .deb files from calamares-packages/ via a chroot hook ──
+          # calamares-packages/ contains pre-downloaded .deb files:
+          #   calamares_3.2.61-1+b1_amd64.deb
+          #   calamares-settings-debian_12.0.9-1+deb12u2_all.deb
+          #
+          # Strategy: copy .debs into config/includes.chroot so they land inside
+          # the chroot at /opt/calamares-debs/, then install via a hook script.
+
+          DEB_DEST="config/includes.chroot/opt/calamares-debs"
+          mkdir -p "$DEB_DEST"
+          cp calamares-packages/*.deb "$DEB_DEST/"
+          echo "Copied .deb files:"
+          ls -lh "$DEB_DEST/"
+
+          # ── 2. Write a chroot hook to install the .deb files ─────────────────
+          # live-build runs hooks/live/*.hook.chroot inside the chroot
+          # during lb chroot phase — perfect for dpkg installs.
+          HOOK_DIR="config/hooks/live"
+          mkdir -p "$HOOK_DIR"
+
+          cat > "${HOOK_DIR}/0200-install-calamares.hook.chroot" <<'HOOKEOF'
+          #!/bin/bash
+          set -euo pipefail
+          echo "[hook] Installing Calamares from local .deb files..."
+
+          DEB_DIR="/opt/calamares-debs"
+
+          # Install dependencies that the .deb files need
+          apt-get install -y --no-install-recommends \
+            python3-pyqt5 \
+            qml-module-qtquick2 \
+            qml-module-qtquick-controls2 \
+            libkpmcore12 \
+            libboost-python1.74.0 \
+            2>/dev/null || true
+
+          # Install the local .deb files
+          # Use dpkg then fix any broken deps with apt-get -f install
+          dpkg -i "${DEB_DIR}"/*.deb || apt-get install -f -y
+
+          # Verify installation
+          if command -v calamares &>/dev/null; then
+            echo "[hook] Calamares installed: $(calamares --version 2>/dev/null || echo 'ok')"
+          else
+            echo "[hook] WARNING: calamares binary not found after install"
+          fi
+
+          # Clean up the .deb files from the final image (saves ~30MB)
+          rm -rf "$DEB_DIR"
+          echo "[hook] Calamares hook complete."
+          HOOKEOF
+
+          chmod +x "${HOOK_DIR}/0200-install-calamares.hook.chroot"
+          echo "Hook written: ${HOOK_DIR}/0200-install-calamares.hook.chroot"
+
+          # ── 2. Calamares branding ─────────────────────────────────────────────
+          BRAND_DIR="config/includes.chroot/usr/share/calamares/branding/diyar"
+          mkdir -p "$BRAND_DIR"
+
+          cat > "${BRAND_DIR}/branding.desc" <<'BRANDEOF'
+          componentName: diyar
+
+          welcomeStyleCalamares: true
+          welcomeExpandingLogo:  true
+
+          strings:
+            productName:         Diyar OS
+            shortProductName:    Diyar
+            version:             "@{VERSION}"
+            shortVersion:        "@{VERSION}"
+            versionedName:       Diyar OS @{VERSION}
+            shortVersionedName:  Diyar @{VERSION}
+            bootloaderEntryName: DiyarOS
+            productUrl:          https://github.com/RiyadhNoori/diyar-os
+            supportUrl:          https://github.com/RiyadhNoori/diyar-os/issues
+            knownIssuesUrl:      https://github.com/RiyadhNoori/diyar-os/issues
+            releaseNotesUrl:     https://github.com/RiyadhNoori/diyar-os/releases
+
+          images:
+            productLogo:         "diyar-logo.png"
+            productIcon:         "diyar-logo.png"
+            productWelcome:      "languages.png"
+
+          slideshow:             "show.qml"
+
+          style:
+            sidebarBackground:   "#0D1525"
+            sidebarText:         "#FFFFFF"
+            sidebarTextSelect:   "#C9963A"
+          BRANDEOF
+
+          # Copy logo into branding dir if available
+          LOGO="$(find config/includes.chroot/usr/share/pixmaps -name "diyar-logo.png" 2>/dev/null | head -1)"
+          if [[ -n "$LOGO" ]]; then
+            cp "$LOGO" "${BRAND_DIR}/diyar-logo.png"
+            echo "Branding logo copied."
+          fi
+
+          # ── 3. Calamares main settings ────────────────────────────────────────
+          CAL_CONF="config/includes.chroot/etc/calamares"
+          mkdir -p "$CAL_CONF/modules"
+
+          cat > "${CAL_CONF}/settings.conf" <<'SETEOF'
+          ---
+          modules-search: [ local, /usr/lib/calamares/modules ]
+
+          sequence:
+            - show:
+              - welcome
+              - locale
+              - keyboard
+              - partition
+              - users
+              - summary
+            - exec:
+              - partition
+              - mount
+              - unpackfs
+              - machineid
+              - fstab
+              - locale
+              - keyboard
+              - localecfg
+              - users
+              - displaymanager
+              - networkcfg
+              - hwclock
+              - grubcfg
+              - bootloader
+              - packages
+              - luksbootkeyfile
+              - plymouthcfg
+              - initramfscfg
+              - initramfs
+              - removeuser
+              - umount
+            - show:
+              - finished
+
+          branding: diyar
+          prompt-install: true
+          dont-chroot: false
+          SETEOF
+
+          # ── 4. Locale module config ───────────────────────────────────────────
+          cat > "${CAL_CONF}/modules/locale.conf" <<'LOCEOF'
+          ---
+          region:   Asia
+          zone:     Baghdad
+          LOCEOF
+
+          # ── 5. Users module config ────────────────────────────────────────────
+          cat > "${CAL_CONF}/modules/users.conf" <<'USEREOF'
+          ---
+          defaultGroups:
+            - sudo
+            - audio
+            - video
+            - plugdev
+            - netdev
+            - bluetooth
+          autologinGroup: autologin
+          doAutologin:    false
+          sudoersGroup:   sudo
+          setRootPassword: false
+          USEREOF
+
+          # ── 6. unpackfs config — copy squashfs from live media ────────────────
+          cat > "${CAL_CONF}/modules/unpackfs.conf" <<'UNPACKEOF'
+          ---
+          unpack:
+            - source: /run/live/medium/live/filesystem.squashfs
+              sourcefs: squashfs
+              destination: ""
+          UNPACKEOF
+
+          # ── 7. Desktop launcher for Calamares ─────────────────────────────────
+          DESKTOP_DIR="config/includes.chroot/usr/share/applications"
+          mkdir -p "$DESKTOP_DIR"
+          cat > "${DESKTOP_DIR}/calamares.desktop" <<'DESKEOF'
+          [Desktop Entry]
+          Type=Application
+          Name=Install Diyar OS
+          Name[ar]=تثبيت نظام ديار
+          Comment=Install Diyar OS to your hard drive
+          Comment[ar]=قم بتثبيت نظام ديار على قرصك الصلب
+          Exec=pkexec calamares
+          Icon=calamares
+          Terminal=false
+          Categories=System;
+          Keywords=install;setup;
+          DESKEOF
+
+          # Also place on the live desktop
+          LIVE_DESK="config/includes.chroot/etc/skel/Desktop"
+          mkdir -p "$LIVE_DESK"
+          cp "${DESKTOP_DIR}/calamares.desktop" "${LIVE_DESK}/install-diyar.desktop"
+          chmod +x "${LIVE_DESK}/install-diyar.desktop"
+
+          # ── 8. polkit rule so Calamares can be launched without password ──────
+          POLKIT_DIR="config/includes.chroot/etc/polkit-1/rules.d"
+          mkdir -p "$POLKIT_DIR"
+          cat > "${POLKIT_DIR}/49-calamares.rules" <<'POLKEOF'
+          polkit.addRule(function(action, subject) {
+              if (action.id === "org.freedesktop.policykit.exec" &&
+                  action.lookup("program") === "/usr/bin/calamares" &&
+                  subject.isInGroup("sudo")) {
+                  return polkit.Result.YES;
+              }
+          });
+          POLKEOF
+
+          echo "=== Calamares setup complete ==="
+          echo "  .deb files       : ${DEB_DEST}/"
+          echo "  install hook     : ${HOOK_DIR}/0200-install-calamares.hook.chroot"
+          echo "  settings.conf    : ${CAL_CONF}/settings.conf"
+          echo "  branding         : ${BRAND_DIR}/"
+          echo "  desktop launcher : ${LIVE_DESK}/install-diyar.desktop"
 
       # ── Build ────────────────────────────────────────────────────────────────
       - name: Build ISO
