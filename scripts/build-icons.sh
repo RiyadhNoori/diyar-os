@@ -163,12 +163,10 @@ process_to_icon() {
 
     echo "     ✅ تم: ${#SIZES[@]} حجم (16px → 256px)"
 }
-
-# ── دالة بناء أيقونة مربعة بحواف دائرية ─────────────────────────────────────
 process_to_rounded_icon() {
     local input_file="$1"
     local icon_name="$2"
-    local radius="${3:-15}"   # نسبة دائرية الحواف بالبكسل للحجم 256
+    local radius="${3:-15}"   # kept for compatibility
 
     if [[ ! -f "$input_file" ]]; then
         echo "  ⚠  الملف غير موجود: $input_file — تم التخطي"
@@ -182,34 +180,19 @@ process_to_rounded_icon() {
         mkdir -p "$dest_dir"
         local out="${dest_dir}/${icon_name}.png"
 
-        # حساب نسبة دائرية الحواف بناءً على الحجم
-        local r=$(( SIZE * radius / 256 ))
-        [[ $r -lt 2 ]] && r=2
-
-        # بناء قناع الحواف الدائرية
-        local mask="/tmp/diyar_mask_${SIZE}.png"
-        convert -size "${SIZE}x${SIZE}" xc:none \
-            -draw "roundrectangle 0,0 $((SIZE-1)),$((SIZE-1)) ${r},${r}" \
-            "$mask"
-
-        # تطبيق القناع على الصورة
+        # Windows/ImageMagick-safe fallback: no roundrectangle mask
         convert "$input_file" \
             -filter Lanczos \
             -resize "${SIZE}x${SIZE}" \
             -gravity Center \
             -background transparent \
             -extent "${SIZE}x${SIZE}" \
-            "$mask" \
-            -alpha off \
-            -compose CopyOpacity \
-            -composite \
             "$out"
-
-        rm -f "$mask"
     done
 
-    echo "     ✅ تم بحواف دائرية: ${#SIZES[@]} حجم"
+    echo "     ✅ تم: ${#SIZES[@]} حجم"
 }
+
 
 # ── دالة معالجة الخلفية ───────────────────────────────────────────────────────
 process_wallpaper() {
