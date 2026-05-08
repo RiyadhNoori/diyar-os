@@ -20,10 +20,28 @@ fi
 # ── المسارات ──────────────────────────────────────────────────────────────────
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(dirname "$SCRIPT_DIR")"
-RAW_DIR="${ROOT_DIR}/raw_images"
-ICON_THEME_DIR="${ROOT_DIR}/diyar-icons"
-WALLPAPER_DIR="${ROOT_DIR}/wallpapers"
-OUTPUT_DIR="${ROOT_DIR}/output"
+BRANDING_SRC="${ROOT_DIR}/config/includes.chroot/opt/diyar-branding"
+ASSETS_DIR="${ROOT_DIR}/assets"
+
+if [[ -d "${BRANDING_SRC}/raw_images" ]]; then
+    RAW_DIR="${BRANDING_SRC}/raw_images"
+    ICON_THEME_DIR="${BRANDING_SRC}/diyar-icons"
+    WALLPAPER_DIR="${BRANDING_SRC}/wallpapers"
+    OUTPUT_DIR="${BRANDING_SRC}/output"
+else
+    RAW_DIR="${ROOT_DIR}/raw_images"
+    ICON_THEME_DIR="${ROOT_DIR}/diyar-icons"
+    WALLPAPER_DIR="${ROOT_DIR}/wallpapers"
+    OUTPUT_DIR="${ROOT_DIR}/output"
+fi
+
+# أولويّة الأصول:
+# 1) assets/ (إذا موجود) — طلب المستخدم
+# 2) raw_images (المسار القديم)
+SOURCE_DIR="$RAW_DIR"
+if [[ -d "$ASSETS_DIR" ]]; then
+    SOURCE_DIR="$ASSETS_DIR"
+fi
 
 # ── أحجام الأيقونات القياسية ──────────────────────────────────────────────────
 SIZES=(16 22 24 32 48 64 128 256)
@@ -44,6 +62,30 @@ detect_bg_color() {
     local img="$1"
     # أخذ لون الزاوية العلوية اليسرى كمرجع للخلفية
     convert "$img" -format "%[pixel:u.p{0,0}]" info: 2>/dev/null || echo "white"
+}
+
+# ── تحديد ملف أصل بشكل مرن حسب الاسم "الواضح" ────────────────────────────────
+resolve_asset() {
+    local base="$1"
+    local normalized="${base//_/-}"
+    local alt="${base//-/_}"
+    local candidates=(
+        "$base" "$normalized" "$alt"
+        "${base,,}" "${normalized,,}" "${alt,,}"
+    )
+    local exts=(jpg jpeg png webp svg JPG JPEG PNG WEBP SVG)
+
+    for name in "${candidates[@]}"; do
+        for ext in "${exts[@]}"; do
+            local p="${SOURCE_DIR}/${name}.${ext}"
+            if [[ -f "$p" ]]; then
+                echo "$p"
+                return 0
+            fi
+        done
+    done
+
+    return 1
 }
 
 # ── دالة المعالجة الذكية للأيقونة ────────────────────────────────────────────
@@ -264,26 +306,48 @@ echo "── مرحلة ١: معالجة الأيقونات ──────�
 echo ""
 
 # الشعار الرئيسي
-process_logo "${RAW_DIR}/Diyar-logo.jpg"
+if logo_asset="$(resolve_asset "Diyar-logo")"; then
+    process_logo "$logo_asset"
+else
+    echo "  ⚠  شعار غير موجود بالاسم المتوقع في ${SOURCE_DIR} — تم التخطي"
+fi
 
 # الأيقونات بإزالة خلفية بيضاء
-process_to_rounded_icon "${RAW_DIR}/Diyar-terminal.jpg"       "utilities-terminal"
-process_to_rounded_icon "${RAW_DIR}/Diyar-browser.jpg"        "web-browser"
-process_to_rounded_icon "${RAW_DIR}/Diyar-home_file.jpg"      "user-home"
-process_to_rounded_icon "${RAW_DIR}/Diyar-home_file.jpg"      "folder-home"
-process_to_rounded_icon "${RAW_DIR}/Diyar-Software_Center.jpg" "software-center"
-process_to_rounded_icon "${RAW_DIR}/Diyar_setting.jpg"        "preferences-desktop"
+if term_asset="$(resolve_asset "Diyar-terminal")"; then
+    process_to_rounded_icon "$term_asset" "utilities-terminal"
+fi
+if browser_asset="$(resolve_asset "Diyar-browser")"; then
+    process_to_rounded_icon "$browser_asset" "web-browser"
+fi
+if home_asset="$(resolve_asset "Diyar-home_file")"; then
+    process_to_rounded_icon "$home_asset" "user-home"
+    process_to_rounded_icon "$home_asset" "folder-home"
+fi
+if sw_asset="$(resolve_asset "Diyar-Software_Center")"; then
+    process_to_rounded_icon "$sw_asset" "software-center"
+    process_to_rounded_icon "$sw_asset" "system-software-install"
+    process_to_rounded_icon "$sw_asset" "debian-installer"
+fi
+if settings_asset="$(resolve_asset "Diyar-setting")"; then
+    process_to_rounded_icon "$settings_asset" "preferences-desktop"
+fi
 
 # نسخ اسم الشعار كأيقونة التوزيعة
-process_to_rounded_icon "${RAW_DIR}/Diyar-logo.jpg"           "distributor-logo-diyar"
-process_to_rounded_icon "${RAW_DIR}/Diyar-logo.jpg"           "start-here"
+if logo_icon_asset="$(resolve_asset "Diyar-logo")"; then
+    process_to_rounded_icon "$logo_icon_asset" "distributor-logo-diyar"
+    process_to_rounded_icon "$logo_icon_asset" "start-here"
+fi
 
 echo ""
 echo "── مرحلة ٢: معالجة الخلفيات ────────────────────────────"
 echo ""
 
-process_wallpaper "${RAW_DIR}/Diyar_wallpaper.jpg"         "diyar-default"
-process_wallpaper "${RAW_DIR}/Diyar-abstract_wallpaper.jpg" "diyar-abstract"
+if wall_asset="$(resolve_asset "Diyar-wallpaper")"; then
+    process_wallpaper "$wall_asset" "diyar-default"
+fi
+if abstract_wall_asset="$(resolve_asset "Diyar-abstract_wallpaper")"; then
+    process_wallpaper "$abstract_wall_asset" "diyar-abstract"
+fi
 
 echo ""
 echo "── مرحلة ٣: بناء ملف index.theme ──────────────────────"
