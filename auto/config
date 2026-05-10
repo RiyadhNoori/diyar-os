@@ -5,6 +5,13 @@
 # =============================================================================
 set -e
 
+# ISO volume label — set ISO_VOLUME in the environment before calling lb config
+# e.g. export ISO_VOLUME="DIYAR_OS_2025.05.10" in the workflow
+ISO_VOLUME="${ISO_VOLUME:-DIYAR_OS}"
+
+# Use zstd compression for CI speed; override with ISO_COMPRESSION=xz for releases
+ISO_COMPRESSION="${ISO_COMPRESSION:-zstd}"
+
 lb config noauto \
     --architectures          amd64 \
     --distribution           bookworm \
@@ -12,19 +19,20 @@ lb config noauto \
     --binary-images          iso-hybrid \
     --iso-application        "Diyar OS" \
     --iso-publisher          "Diyar OS Project" \
-    --iso-volume             "DIYAR_OS_1_0" \
+    --iso-volume             "${ISO_VOLUME}" \
     --bootappend-live        "boot=live components quiet splash locales=ar_IQ.UTF-8 keyboard-layouts=ara,us timezone=Asia/Baghdad hostname=diyar-live username=diyar" \
-    --linux-packages         "linux-image linux-headers" \
-    --linux-flavours         amd64 \
-    --mirror-bootstrap       "https://deb.debian.org/debian/" \
+    --linux-packages         "linux-image-amd64 linux-headers-amd64" \
+    --mirror-bootstrap       "http://deb.debian.org/debian/" \
     --mirror-chroot          "https://deb.debian.org/debian/" \
     --mirror-binary          "https://deb.debian.org/debian/" \
     --mirror-chroot-security "https://security.debian.org/debian-security/" \
     --mirror-binary-security "https://security.debian.org/debian-security/" \
     --apt                    apt \
-    --apt-options            "--yes --no-install-recommends" \
+    --apt-options            "--yes" \
     --apt-recommends         false \
-    --compression            xz \
+    --compression            "${ISO_COMPRESSION}" \
     --chroot-filesystem      squashfs \
     --debootstrap-options    "--keyring=/usr/share/keyrings/debian-archive-keyring.gpg" \
+    --memtest                none \
+    --zsync                  false \
     "${@}"
