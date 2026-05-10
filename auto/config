@@ -9,8 +9,9 @@ set -e
 # e.g. export ISO_VOLUME="DIYAR_OS_2025.05.10" in the workflow
 ISO_VOLUME="${ISO_VOLUME:-DIYAR_OS}"
 
-# Use zstd compression for CI speed; override with ISO_COMPRESSION=xz for releases
-ISO_COMPRESSION="${ISO_COMPRESSION:-zstd}"
+# Compression: live-build supports gzip, bzip2, lzo, lzma, xz (not zstd)
+# Use XZ_OPT="-T0" in environment for parallel threads (much faster)
+ISO_COMPRESSION="${ISO_COMPRESSION:-xz}"
 
 lb config noauto \
     --architectures          amd64 \
