@@ -1,0 +1,73 @@
+# Diyar OS — Software Manager dialog color scheme
+# Place at: /etc/diyar-dialogrc  or  ~/.dialogrc
+# Set in the software manager script: export DIALOGRC=/etc/diyar-dialogrc
+
+# Screen/background
+screen_color = (WHITE,BLACK,OFF)
+
+# Dialog box
+dialog_color = (WHITE,BLACK,OFF)
+
+# Title bar of dialog box
+title_color = (YELLOW,BLACK,ON)
+
+# Border of dialog box
+border_color = (WHITE,BLACK,ON)
+border2_color = (WHITE,BLACK,ON)
+
+# Buttons
+button_active_color   = (BLACK,YELLOW,ON)
+button_inactive_color = (WHITE,BLACK,OFF)
+button_key_active_color   = (BLACK,YELLOW,ON)
+button_key_inactive_color = (YELLOW,BLACK,OFF)
+button_label_active_color   = (BLACK,YELLOW,ON)
+button_label_inactive_color = (WHITE,BLACK,OFF)
+
+# Input fields
+inputbox_color  = (WHITE,BLACK,OFF)
+inputbox_border_color = (WHITE,BLACK,OFF)
+inputbox_border2_color = (WHITE,BLACK,OFF)
+
+# Search box / find box
+searchbox_color  = (WHITE,BLACK,OFF)
+searchbox_title_color  = (YELLOW,BLACK,ON)
+searchbox_border_color = (WHITE,BLACK,OFF)
+searchbox_border2_color = (WHITE,BLACK,OFF)
+
+# List boxes / menus (this is the main package list area)
+menubox_color  = (WHITE,BLACK,OFF)
+menubox_border_color = (WHITE,BLACK,OFF)
+menubox_border2_color = (WHITE,BLACK,OFF)
+
+# Selected item in list
+item_color = (WHITE,BLACK,OFF)
+item_selected_color = (BLACK,YELLOW,ON)
+
+# Tags (the checkboxes/radio buttons)
+tag_color = (YELLOW,BLACK,ON)
+tag_selected_color = (BLACK,YELLOW,ON)
+tag_key_color = (YELLOW,BLACK,OFF)
+tag_key_selected_color = (BLACK,YELLOW,ON)
+
+# Check (space-selected items)
+check_color = (WHITE,BLACK,OFF)
+check_selected_color = (BLACK,YELLOW,ON)
+
+# Gauge / progress bar
+gauge_color = (BLACK,YELLOW,ON)
+
+# Form fields
+form_active_text_color = (WHITE,BLACK,ON)
+form_text_color = (WHITE,BLACK,OFF)
+form_item_readonly_color = (WHITE,BLACK,OFF)
+
+# Arrows
+arrow_color = (YELLOW,BLACK,ON)
+arrow_selected_color = (BLACK,YELLOW,ON)
+
+# Position indicator
+position_indicator_color = (YELLOW,BLACK,ON)
+
+# Uarrow / darrow (scroll arrows)
+uarrow_color = (YELLOW,BLACK,ON)
+darrow_color = (YELLOW,BLACK,ON)
