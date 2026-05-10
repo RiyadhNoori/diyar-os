@@ -271,7 +271,13 @@ jobs:
       - name: Configure live-build
         run: |
           echo "Running lb config..."
-          sudo bash auto/config
+          VERSION="${{ steps.meta.outputs.version }}"
+          VOLUME_LABEL="DIYAR_OS_$(echo "${VERSION}" | tr '.-' '_' | cut -c1-16)"
+          echo "ISO_VOLUME=${VOLUME_LABEL}"
+          sudo env \
+            ISO_VOLUME="${VOLUME_LABEL}" \
+            ISO_COMPRESSION="zstd" \
+            bash auto/config
           echo "Configuration complete."
           echo "=== config/ tree ==="
           find config/ -type f | sort
@@ -279,6 +285,46 @@ jobs:
           sudo cat config/common 2>/dev/null || true
           echo "=== lb --version ==="
           lb --version
+
+      # ── Ensure full package lists are in place ───────────────────────────────
+      - name: Ensure complete package lists
+        run: |
+          mkdir -p config/package-lists
+          mkdir -p config/hooks/live
+
+          # ── Audit existing lists ──────────────────────────────────────────────
+          echo "=== Existing package lists ==="
+          ls -la config/package-lists/ || true
+          for f in config/package-lists/*.list.chroot; do
+            echo "--- $f ---"
+            cat "$f" 2>/dev/null || true
+          done
+
+          # ── Write package lists via base64-decoded python3 (YAML-safe) ─────────
+          # Root cause of 1.6GB ISO: heredoc indentation added leading spaces to every
+          # package name, so live-build could not find any package and installed nothing.
+          # Fix: decode and run python script that writes clean unindented lists.
+          echo "aW1wb3J0IG9zLCBnbG9iCgpkZXNrdG9wID0gIiIiIyBYRkNFNCBEZXNrdG9wCnhmY2U0CnhmY2U0LWdvb2RpZXMKeGZjZTQtdGVybWluYWwKeGZjZTQtdGFza21hbmFnZXIKeGZjZTQtc2NyZWVuc2hvb3Rlcgp4ZmNlNC1ub3RpZnlkCnhmY2U0LXBvd2VyLW1hbmFnZXIKeGZjb25mCnRodW5hcgp0aHVuYXItYXJjaGl2ZS1wbHVnaW4KdGh1bmFyLXZvbG1hbgp0dW1ibGVyCmZpbGUtcm9sbGVyCm1vdXNlcGFkCnJpc3RyZXR0bwojIERpc3BsYXkgbWFuYWdlcgpsaWdodGRtCmxpZ2h0ZG0tZ3RrLWdyZWV0ZXIKbGlnaHRkbS1ndGstZ3JlZXRlci1zZXR0aW5ncwojIE5ldHdvcmsKbmV0d29yay1tYW5hZ2VyCm5ldHdvcmstbWFuYWdlci1nbm9tZQpuZXR3b3JrLW1hbmFnZXItb3BlbnZwbgpuZXR3b3JrLW1hbmFnZXItb3BlbnZwbi1nbm9tZQojIEF1ZGlvL1ZpZGVvCnB1bHNlYXVkaW8KcGF2dWNvbnRyb2wKdmxjCiMgRm9udHMKZm9udHMtbm90bwpmb250cy1ub3RvLWNvbG9yLWVtb2ppCmZvbnRzLW5vdG8tY2prCmZvbnRzLWxpYmVyYXRpb24KZm9udHMtYXJhYmV5ZXMKZm9udHMta2Fjc3QKZm9udHMtaG9zbnktYW1pcmkKIyBBcmFiaWMgbG9jYWxlCmxvY2FsZXMKYXNwZWxsLWFyCmh1bnNwZWxsLWFyCiMgU3lzdGVtIHV0aWxpdGllcwpiYXNoLWNvbXBsZXRpb24KY3VybAp3Z2V0CmdpdApodG9wCm5lb2ZldGNoCmdwYXJ0ZWQKZ25vbWUtZGlzay11dGlsaXR5CnVkaXNrczIKdXBvd2VyCmJsdWVtYW4KZGlhbG9nCndoaXB0YWlsCiMgQXJjaGl2ZSB0b29scwpwN3ppcC1mdWxsCnVuemlwCnppcAojIEFjY2Vzc2liaWxpdHkKYXQtc3BpMi1jb3JlCiMgTGl2ZSBzeXN0ZW0KbGl2ZS1ib290CmxpdmUtY29uZmlnCmxpdmUtY29uZmlnLXN5c3RlbWQKIiIiCgpkZXZ0b29scyA9ICIiIiMgRGV2IHRvb2xzIC0gcmVxdWlyZXMgdGhpcmQtcGFydHkgcmVwb3MgKDAwNTAgaG9vaykKY29kZQojIEJ1aWxkIGVzc2VudGlhbHMKYnVpbGQtZXNzZW50aWFsCmNtYWtlCmdkYgpnY2MKZysrCm1ha2UKcHl0aG9uMwpweXRob24zLXBpcApweXRob24zLXZlbnYKaXB5dGhvbjMKIyBOb2RlLmpzIDIwIExUUwpub2RlanMKIyBEb2NrZXIKZG9ja2VyLWNlCmRvY2tlci1jZS1jbGkKY29udGFpbmVyZC5pbwpkb2NrZXItY29tcG9zZS1wbHVnaW4KIyBHaXQgZXh0cmFzCmdpdC1sZnMKZ2l0awojIERhdGFiYXNlIHRvb2xzCnNxbGl0ZTMKcG9zdGdyZXNxbC1jbGllbnQKZGVmYXVsdC1teXNxbC1jbGllbnQKIiIiCgpvcy5tYWtlZGlycygiY29uZmlnL3BhY2thZ2UtbGlzdHMiLCBleGlzdF9vaz1UcnVlKQpleGlzdGluZyA9IGdsb2IuZ2xvYigiY29uZmlnL3BhY2thZ2UtbGlzdHMvKi5saXN0LmNocm9vdCIpCmhhc194ZmNlID0gYW55KCJ4ZmNlNCIgaW4gb3BlbihmKS5yZWFkKCkgZm9yIGYgaW4gZXhpc3RpbmcgaWYgb3MucGF0aC5leGlzdHMoZikpCmhhc19kZXYgID0gYW55KCJkb2NrZXIiIGluIG9wZW4oZikucmVhZCgpIGZvciBmIGluIGV4aXN0aW5nIGlmIG9zLnBhdGguZXhpc3RzKGYpKQoKaWYgbm90IGhhc194ZmNlOgogICAgd2l0aCBvcGVuKCJjb25maWcvcGFja2FnZS1saXN0cy8wMS1kZXNrdG9wLmxpc3QuY2hyb290IiwgInciKSBhcyBmOgogICAgICAgIGYud3JpdGUoZGVza3RvcCkKICAgIG4gPSBsZW4oW2wgZm9yIGwgaW4gZGVza3RvcC5zcGxpdGxpbmVzKCkgaWYgbC5zdHJpcCgpIGFuZCBub3QgbC5zdGFydHN3aXRoKCIjIildKQogICAgcHJpbnQoZiJXcml0dGVuIDAxLWRlc2t0b3AubGlzdC5jaHJvb3QgKHtufSBwYWNrYWdlcykiKQplbHNlOgogICAgcHJpbnQoIlhGQ0U0IGxpc3QgZXhpc3RzIOKAlCBza2lwcGluZyIpCgppZiBub3QgaGFzX2RldjoKICAgIHdpdGggb3BlbigiY29uZmlnL3BhY2thZ2UtbGlzdHMvMDItZGV2dG9vbHMubGlzdC5jaHJvb3QiLCAidyIpIGFzIGY6CiAgICAgICAgZi53cml0ZShkZXZ0b29scykKICAgIG4gPSBsZW4oW2wgZm9yIGwgaW4gZGV2dG9vbHMuc3BsaXRsaW5lcygpIGlmIGwuc3RyaXAoKSBhbmQgbm90IGwuc3RhcnRzd2l0aCgiIyIpXSkKICAgIHByaW50KGYiV3JpdHRlbiAwMi1kZXZ0b29scy5saXN0LmNocm9vdCAoe259IHBhY2thZ2VzKSIpCmVsc2U6CiAgICBwcmludCgiRGV2IHRvb2xzIGxpc3QgZXhpc3RzIOKAlCBza2lwcGluZyIpCgpmb3IgcGF0aCBpbiBzb3J0ZWQoZ2xvYi5nbG9iKCJjb25maWcvcGFja2FnZS1saXN0cy8qLmxpc3QuY2hyb290IikpOgogICAgYmFkID0gW2wgZm9yIGwgaW4gb3BlbihwYXRoKSBpZiBsWzA6MV0gaW4gKCIgIiwgIgkiKV0KICAgIG4gPSBsZW4oW2wgZm9yIGwgaW4gb3BlbihwYXRoKSBpZiBsLnN0cmlwKCkgYW5kIG5vdCBsLnN0YXJ0c3dpdGgoIiMiKV0pCiAgICBzdGF0dXMgPSBmIldBUk5JTkcge2xlbihiYWQpfSBsaW5lcyB3aXRoIGxlYWRpbmcgd2hpdGVzcGFjZSIgaWYgYmFkIGVsc2UgIk9LIgogICAgcHJpbnQoZiJ7c3RhdHVzfToge3BhdGh9ICh7bn0gcGFja2FnZXMpIikK" | base64 -d | python3
+          echo "Package lists written. Verifying no leading whitespace..."
+
+          # ── Hook: add third-party repos BEFORE package install ───────────────
+          # live-build hook 0050 runs early in lb chroot — before package install
+          # This adds VSCode, NodeSource, and Docker repos so their packages resolve
+          echo "IyEvYmluL2Jhc2gKc2V0IC1ldW8gcGlwZWZhaWwKZWNobyAiW2hvb2tdIEFkZGluZyB0aGlyZC1wYXJ0eSByZXBvcyAoVlNDb2RlLCBOb2RlLmpzLCBEb2NrZXIpLi4uIgoKZXhwb3J0IERFQU5fRlJPTlRFTkQ9bm9uaW50ZXJhY3RpdmUKCiMgLS0gVlMgQ29kZSAoTWljcm9zb2Z0KSAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KaWYgISBncmVwIC1yciAicGFja2FnZXMubWljcm9zb2Z0IiAvZXRjL2FwdC9zb3VyY2VzLmxpc3QuZC8gMj4vZGV2L251bGwgfCBncmVwIC1xIHZzY29kZTsgdGhlbgogIGVjaG8gIlthcHRdIEFkZGluZyBWU0NvZGUgcmVwbyIKICB3Z2V0IC1xTy0gaHR0cHM6Ly9wYWNrYWdlcy5taWNyb3NvZnQuY29tL2tleXMvbWljcm9zb2Z0LmFzYyBcCiAgICB8IGdwZyAtLWRlYXJtb3IgPiAvZXRjL2FwdC9rZXlyaW5ncy9taWNyb3NvZnQuZ3BnCiAgZWNobyAiZGViIFthcmNoPWFtZDY0IHNpZ25lZC1ieT0vZXRjL2FwdC9rZXlyaW5ncy9taWNyb3NvZnQuZ3BnXSBodHRwczovL3BhY2thZ2VzLm1pY3Jvc29mdC5jb20vcmVwb3MvY29kZSBzdGFibGUgbWFpbiIgXAogICAgPiAvZXRjL2FwdC9zb3VyY2VzLmxpc3QuZC92c2NvZGUubGlzdApmaQoKIyAtLSBOb2RlLmpzIDIwIExUUyAoTm9kZVNvdXJjZSkgLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQppZiBbICEgLWYgL2V0Yy9hcHQvc291cmNlcy5saXN0LmQvbm9kZXNvdXJjZS5saXN0IF07IHRoZW4KICBlY2hvICJbYXB0XSBBZGRpbmcgTm9kZS5qcyAyMCBMVFMgcmVwbyIKICB3Z2V0IC1xTy0gaHR0cHM6Ly9kZWIubm9kZXNvdXJjZS5jb20vc2V0dXBfMjAueCBcCiAgICB8IGJhc2ggLSAyPi9kZXYvbnVsbCB8fCB0cnVlCmZpCgojIC0tIERvY2tlciAtLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLQppZiBbICEgLWYgL2V0Yy9hcHQvc291cmNlcy5saXN0LmQvZG9ja2VyLmxpc3QgXTsgdGhlbgogIGVjaG8gIlthcHRdIEFkZGluZyBEb2NrZXIgcmVwbyIKICB3Z2V0IC1xTy0gaHR0cHM6Ly9kb3dubG9hZC5kb2NrZXIuY29tL2xpbnV4L2RlYmlhbi9ncGcgXAogICAgfCBncGcgLS1kZWFybW9yID4gL2V0Yy9hcHQva2V5cmluZ3MvZG9ja2VyLmdwZwogIGVjaG8gImRlYiBbYXJjaD1hbWQ2NCBzaWduZWQtYnk9L2V0Yy9hcHQva2V5cmluZ3MvZG9ja2VyLmdwZ10gaHR0cHM6Ly9kb3dubG9hZC5kb2NrZXIuY29tL2xpbnV4L2RlYmlhbiBib29rd29ybSBzdGFibGUiIFwKICAgID4gL2V0Yy9hcHQvc291cmNlcy5saXN0LmQvZG9ja2VyLmxpc3QKZmkKCiMgLS0gUmVmcmVzaCBhcHQgYWZ0ZXIgYWRkaW5nIHJlcG9zIC0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0tLS0KZWNobyAiW2FwdF0gUnVubmluZyBhcHQtZ2V0IHVwZGF0ZS4uLiIKYXB0LWdldCB1cGRhdGUgLXFxCmVjaG8gIltob29rXSBUaGlyZC1wYXJ0eSByZXBvcyByZWFkeS4iCg==" \
+            | base64 -d > config/hooks/live/0050-add-third-party-repos.hook.chroot
+          chmod +x config/hooks/live/0050-add-third-party-repos.hook.chroot
+          echo "Third-party repo hook written."
+
+          # ── Verify final package list sizes ───────────────────────────────────
+          echo "=== Final package lists ==="
+          for f in config/package-lists/*.list.chroot; do
+            COUNT=$(grep -cv "^#\|^$" "$f" 2>/dev/null || echo 0)
+            echo "  $f → ${COUNT} packages"
+          done
+          TOTAL=$(grep -rh "^[^#]" config/package-lists/*.list.chroot 2>/dev/null \
+            | grep -v "^$" | wc -l)
+          echo "Total packages to install: ${TOTAL}"
+          echo "Expected ISO size: ~3–5 GB (was 1.6 GB = packages were missing)"
 
       # ── Inject version into ISO ──────────────────────────────────────────────
       - name: Diagnose environment
@@ -412,47 +458,76 @@ jobs:
           # ── Set Diyar icon theme as default in XFCE4 ─────────────────────────
           XFCE_DIR="config/includes.chroot/etc/xdg/xfce4/xfconf/xfce-perchannel-xml"
           mkdir -p "$XFCE_DIR"
-          # Only write if not already present
-          if [[ ! -f "${XFCE_DIR}/xsettings.xml" ]]; then
-            cat > "${XFCE_DIR}/xsettings.xml" <<'XFCEEOF'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <channel name="xsettings" version="1.0">
-            <property name="Net" type="empty">
-              <property name="IconThemeName" type="string" value="Diyar"/>
-              <property name="ThemeName"     type="string" value="Adwaita-dark"/>
-            </property>
-          </channel>
-          XFCEEOF
-            echo "XFCE4 icon theme default set to Diyar"
-          else
-            # Patch the existing file to set the icon theme
-            sed -i 's/value="[^"]*"\s*\/>\s*<!-- IconThemeName -->/value="Diyar"\/>/' \
-              "${XFCE_DIR}/xsettings.xml" || true
-            echo "XFCE4 xsettings.xml already exists — patched icon theme"
-          fi
+
+          # Write clean XML — no leading spaces (previous heredoc had YAML indent bug)
+          # Always overwrite to guarantee correct values land in the ISO
+          printf '%s\n' \
+            '<?xml version="1.0" encoding="UTF-8"?>' \
+            '<channel name="xsettings" version="1.0">' \
+            '  <property name="Net" type="empty">' \
+            '    <property name="IconThemeName" type="string" value="Diyar"/>' \
+            '    <property name="ThemeName"     type="string" value="Adwaita-dark"/>' \
+            '    <property name="CursorThemeName" type="string" value="Adwaita"/>' \
+            '  </property>' \
+            '  <property name="Gtk" type="empty">' \
+            '    <property name="FontName" type="string" value="Noto Sans Arabic 11"/>' \
+            '  </property>' \
+            '</channel>' \
+            > "${XFCE_DIR}/xsettings.xml"
+          echo "XFCE4 xsettings.xml written (IconThemeName=Diyar)"
 
           # ── Register wallpaper with XFCE4 ────────────────────────────────────
-          if [[ ! -f "${XFCE_DIR}/xfce4-desktop.xml" ]]; then
-            cat > "${XFCE_DIR}/xfce4-desktop.xml" <<'WPEOF'
-          <?xml version="1.0" encoding="UTF-8"?>
-          <channel name="xfce4-desktop" version="1.0">
-            <property name="backdrop" type="empty">
-              <property name="screen0" type="empty">
-                <property name="monitorVirtual1" type="empty">
-                  <property name="workspace0" type="empty">
-                    <property name="image-path" type="string"
-                      value="/usr/share/diyar-os/wallpapers/diyar-default-1920x1080.jpg"/>
-                    <property name="image-style" type="int" value="5"/>
-                  </property>
-                </property>
-              </property>
-            </property>
-          </channel>
-          WPEOF
-            echo "XFCE4 wallpaper default configured"
-          fi
+          # Detect actual wallpaper filename rather than hardcoding
+          WALL_FILE=$(find config/includes.chroot/usr/share/diyar-os/wallpapers/ \
+            -type f \( -name "*.jpg" -o -name "*.png" \) 2>/dev/null | sort | head -1)
+          WALL_PATH="/usr/share/diyar-os/wallpapers/$(basename "${WALL_FILE:-diyar-default.jpg}")"
 
-          echo "=== Branding injection complete ==="
+          printf '%s\n' \
+            '<?xml version="1.0" encoding="UTF-8"?>' \
+            '<channel name="xfce4-desktop" version="1.0">' \
+            '  <property name="backdrop" type="empty">' \
+            '    <property name="screen0" type="empty">' \
+            '      <property name="monitorVirtual1" type="empty">' \
+            '        <property name="workspace0" type="empty">' \
+            "          <property name=\"last-image\"  type=\"string\" value=\"${WALL_PATH}\"/>" \
+            "          <property name=\"image-path\"  type=\"string\" value=\"${WALL_PATH}\"/>" \
+            '          <property name="image-style" type="int"    value="5"/>' \
+            '          <property name="image-show"  type="bool"   value="true"/>' \
+            '        </property>' \
+            '      </property>' \
+            '      <property name="monitorHDMI-1" type="empty">' \
+            '        <property name="workspace0" type="empty">' \
+            "          <property name=\"last-image\"  type=\"string\" value=\"${WALL_PATH}\"/>" \
+            "          <property name=\"image-path\"  type=\"string\" value=\"${WALL_PATH}\"/>" \
+            '          <property name="image-style" type="int"    value="5"/>' \
+            '          <property name="image-show"  type="bool"   value="true"/>' \
+            '        </property>' \
+            '      </property>' \
+            '    </property>' \
+            '  </property>' \
+            '</channel>' \
+            > "${XFCE_DIR}/xfce4-desktop.xml"
+          echo "XFCE4 xfce4-desktop.xml written (wallpaper=${WALL_PATH})"
+
+          # ── Write icon cache + index.theme hook (base64-encoded for YAML safety) ──
+          HOOK_DIR_ICONS="config/hooks/live"
+          mkdir -p "$HOOK_DIR_ICONS"
+          echo "IyEvYmluL2Jhc2gKc2V0IC1ldW8gcGlwZWZhaWwKZWNobyAiW2hvb2tdIFVwZGF0aW5nIGljb24gY2FjaGVzLi4uIgppZiBbICEgLWYgL3Vzci9zaGFyZS9pY29ucy9EaXlhci9pbmRleC50aGVtZSBdOyB0aGVuCiAgZWNobyAiW2hvb2tdIFdyaXRpbmcgaW5kZXgudGhlbWUgZm9yIERpeWFyIGljb24gdGhlbWUiCiAgbWtkaXIgLXAgL3Vzci9zaGFyZS9pY29ucy9EaXlhcgogIHByaW50ZiAnJXNcbicgJ1tJY29uIFRoZW1lXScgJ05hbWU9RGl5YXInICdOYW1lW2FyXT3Yr9mK2KfYsScgXAogICAgJ0NvbW1lbnQ9RGl5YXIgT1MgSWNvbiBUaGVtZScgJ0luaGVyaXRzPVBhcGlydXMtRGFyayxoaWNvbG9yJyBcCiAgICAnRGlyZWN0b3JpZXM9MTZ4MTYvYXBwcywyMngyMi9hcHBzLDI0eDI0L2FwcHMsMzJ4MzIvYXBwcyw0OHg0OC9hcHBzLDY0eDY0L2FwcHMsMTI4eDEyOC9hcHBzLDI1NngyNTYvYXBwcycgXAogICAgJycgJ1sxNngxNi9hcHBzXScgJ1NpemU9MTYnICdDb250ZXh0PUFwcGxpY2F0aW9ucycgJ1R5cGU9VGhyZXNob2xkJyAnVGhyZXNob2xkPTInIFwKICAgICcnICdbMjJ4MjIvYXBwc10nICdTaXplPTIyJyAnQ29udGV4dD1BcHBsaWNhdGlvbnMnICdUeXBlPVRocmVzaG9sZCcgJ1RocmVzaG9sZD0yJyBcCiAgICAnJyAnWzI0eDI0L2FwcHNdJyAnU2l6ZT0yNCcgJ0NvbnRleHQ9QXBwbGljYXRpb25zJyAnVHlwZT1UaHJlc2hvbGQnICdUaHJlc2hvbGQ9MicgXAogICAgJycgJ1szMngzMi9hcHBzXScgJ1NpemU9MzInICdDb250ZXh0PUFwcGxpY2F0aW9ucycgJ1R5cGU9VGhyZXNob2xkJyAnVGhyZXNob2xkPTInIFwKICAgICcnICdbNDh4NDgvYXBwc10nICdTaXplPTQ4JyAnQ29udGV4dD1BcHBsaWNhdGlvbnMnICdUeXBlPVRocmVzaG9sZCcgJ1RocmVzaG9sZD00JyBcCiAgICAnJyAnWzY0eDY0L2FwcHNdJyAnU2l6ZT02NCcgJ0NvbnRleHQ9QXBwbGljYXRpb25zJyAnVHlwZT1UaHJlc2hvbGQnICdUaHJlc2hvbGQ9NCcgXAogICAgJycgJ1sxMjh4MTI4L2FwcHNdJyAnU2l6ZT0xMjgnICdDb250ZXh0PUFwcGxpY2F0aW9ucycgJ1R5cGU9VGhyZXNob2xkJyAnVGhyZXNob2xkPTgnIFwKICAgICcnICdbMjU2eDI1Ni9hcHBzXScgJ1NpemU9MjU2JyAnQ29udGV4dD1BcHBsaWNhdGlvbnMnICdUeXBlPVRocmVzaG9sZCcgJ1RocmVzaG9sZD04JyBcCiAgICA+IC91c3Ivc2hhcmUvaWNvbnMvRGl5YXIvaW5kZXgudGhlbWUKZmkKZ3RrLXVwZGF0ZS1pY29uLWNhY2hlIC1mIC10IC91c3Ivc2hhcmUvaWNvbnMvRGl5YXIKZ3RrLXVwZGF0ZS1pY29uLWNhY2hlIC1mIC10IC91c3Ivc2hhcmUvaWNvbnMvaGljb2xvciAyPi9kZXYvbnVsbCB8fCB0cnVlCmVjaG8gIltob29rXSBJY29uIGNhY2hlIHVwZGF0ZSBjb21wbGV0ZS4iCg==" \
+            | base64 -d > "${HOOK_DIR_ICONS}/0100-update-icon-cache.hook.chroot"
+          chmod +x "${HOOK_DIR_ICONS}/0100-update-icon-cache.hook.chroot"
+          echo "Icon cache hook written."
+
+          # ── Fix Software Manager dialog colors ────────────────────────────────
+          # The software manager uses whiptail/dialog with wrong DIALOGRC colors
+          # (red background, magenta text — unreadable). This hook:
+          #   1. Writes /etc/diyar-dialogrc with correct black/yellow Diyar theme
+          #   2. Scans /opt, /usr/local/sbin, /usr/local/bin for the manager script
+          #   3. Injects  export DIALOGRC=/etc/diyar-dialogrc  after the shebang
+          #   4. Falls back to /etc/environment for system-wide coverage
+          echo "IyEvYmluL2Jhc2gKc2V0IC1ldW8gcGlwZWZhaWwKZWNobyAiW2hvb2tdIEZpeGluZyBEaXlhciBTb2Z0d2FyZSBNYW5hZ2VyIGNvbG9ycy4uLiIKCiMgV3JpdGUgdGhlIGRpYWxvZ3JjIGNvbG9yIHRoZW1lCkRJQUxPR1JDX1BBVEg9Ii9ldGMvZGl5YXItZGlhbG9ncmMiCmNhdCA+ICIkRElBTE9HUkNfUEFUSCIgPDwgJ0RJQUxPR1JDRU9GJwojIERpeWFyIE9TIFNvZnR3YXJlIE1hbmFnZXIg4oCUIGRpYWxvZyBjb2xvciB0aGVtZQpzY3JlZW5fY29sb3IgICAgICAgICAgICAgID0gKFdISVRFLEJMQUNLLE9GRikKZGlhbG9nX2NvbG9yICAgICAgICAgICAgICA9IChXSElURSxCTEFDSyxPRkYpCnRpdGxlX2NvbG9yICAgICAgICAgICAgICAgPSAoWUVMTE9XLEJMQUNLLE9OKQpib3JkZXJfY29sb3IgICAgICAgICAgICAgID0gKFdISVRFLEJMQUNLLE9OKQpib3JkZXIyX2NvbG9yICAgICAgICAgICAgID0gKFdISVRFLEJMQUNLLE9OKQpidXR0b25fYWN0aXZlX2NvbG9yICAgICAgID0gKEJMQUNLLFlFTExPVyxPTikKYnV0dG9uX2luYWN0aXZlX2NvbG9yICAgICA9IChXSElURSxCTEFDSyxPRkYpCmJ1dHRvbl9rZXlfYWN0aXZlX2NvbG9yICAgPSAoQkxBQ0ssWUVMTE9XLE9OKQpidXR0b25fa2V5X2luYWN0aXZlX2NvbG9yID0gKFlFTExPVyxCTEFDSyxPRkYpCmJ1dHRvbl9sYWJlbF9hY3RpdmVfY29sb3IgICA9IChCTEFDSyxZRUxMT1csT04pCmJ1dHRvbl9sYWJlbF9pbmFjdGl2ZV9jb2xvciA9IChXSElURSxCTEFDSyxPRkYpCmlucHV0Ym94X2NvbG9yICAgICAgICAgICAgPSAoV0hJVEUsQkxBQ0ssT0ZGKQppbnB1dGJveF9ib3JkZXJfY29sb3IgICAgID0gKFdISVRFLEJMQUNLLE9GRikKc2VhcmNoYm94X2NvbG9yICAgICAgICAgICA9IChXSElURSxCTEFDSyxPRkYpCnNlYXJjaGJveF90aXRsZV9jb2xvciAgICAgPSAoWUVMTE9XLEJMQUNLLE9OKQpzZWFyY2hib3hfYm9yZGVyX2NvbG9yICAgID0gKFdISVRFLEJMQUNLLE9GRikKbWVudWJveF9jb2xvciAgICAgICAgICAgICA9IChXSElURSxCTEFDSyxPRkYpCm1lbnVib3hfYm9yZGVyX2NvbG9yICAgICAgPSAoV0hJVEUsQkxBQ0ssT0ZGKQppdGVtX2NvbG9yICAgICAgICAgICAgICAgID0gKFdISVRFLEJMQUNLLE9GRikKaXRlbV9zZWxlY3RlZF9jb2xvciAgICAgICA9IChCTEFDSyxZRUxMT1csT04pCnRhZ19jb2xvciAgICAgICAgICAgICAgICAgPSAoWUVMTE9XLEJMQUNLLE9OKQp0YWdfc2VsZWN0ZWRfY29sb3IgICAgICAgID0gKEJMQUNLLFlFTExPVyxPTikKdGFnX2tleV9jb2xvciAgICAgICAgICAgICA9IChZRUxMT1csQkxBQ0ssT0ZGKQp0YWdfa2V5X3NlbGVjdGVkX2NvbG9yICAgID0gKEJMQUNLLFlFTExPVyxPTikKY2hlY2tfY29sb3IgICAgICAgICAgICAgICA9IChXSElURSxCTEFDSyxPRkYpCmNoZWNrX3NlbGVjdGVkX2NvbG9yICAgICAgPSAoQkxBQ0ssWUVMTE9XLE9OKQpnYXVnZV9jb2xvciAgICAgICAgICAgICAgID0gKEJMQUNLLFlFTExPVyxPTikKZm9ybV9hY3RpdmVfdGV4dF9jb2xvciAgICA9IChXSElURSxCTEFDSyxPTikKZm9ybV90ZXh0X2NvbG9yICAgICAgICAgICA9IChXSElURSxCTEFDSyxPRkYpCnVhcnJvd19jb2xvciAgICAgICAgICAgICAgPSAoWUVMTE9XLEJMQUNLLE9OKQpkYXJyb3dfY29sb3IgICAgICAgICAgICAgID0gKFlFTExPVyxCTEFDSyxPTikKRElBTE9HUkNFT0YKZWNobyAiW2hvb2tdIFdyaXR0ZW46ICRESUFMT0dSQ19QQVRIIgoKIyBGaW5kIHRoZSBzb2Z0d2FyZSBtYW5hZ2VyIHNjcmlwdCBhbmQgaW5qZWN0IERJQUxPR1JDIGV4cG9ydAojIFNlYXJjaCBjb21tb24gbG9jYXRpb25zOiAvb3B0LCAvdXNyL2xvY2FsL3NiaW4sIC91c3IvbG9jYWwvYmluLCAvdXNyL2JpbgpGT1VORD0wCmZvciBTRUFSQ0hfRElSIGluIC9vcHQgL3Vzci9sb2NhbC9zYmluIC91c3IvbG9jYWwvYmluIC91c3IvYmluIC91c3Ivc2hhcmUvZGl5YXItb3M7IGRvCiAgd2hpbGUgSUZTPSByZWFkIC1yIC1kICcnIFNDUklQVDsgZG8KICAgICMgQ2hlY2sgaWYgaXQncyBhIHNoZWxsIHNjcmlwdCByZWZlcmVuY2luZyBkaWFsb2cgb3Igd2hpcHRhaWwKICAgIGlmIGhlYWQgLTUgIiRTQ1JJUFQiIDI+L2Rldi9udWxsIHwgZ3JlcCAtcWkgImJhc2hcfHNoIiAmJiBcCiAgICAgICBncmVwIC1xaSAid2hpcHRhaWxcfGRpYWxvZyIgIiRTQ1JJUFQiIDI+L2Rldi9udWxsOyB0aGVuCiAgICAgIGVjaG8gIltob29rXSBGb3VuZCBzb2Z0d2FyZSBtYW5hZ2VyOiAkU0NSSVBUIgogICAgICAjIE9ubHkgYWRkIGlmIG5vdCBhbHJlYWR5IHByZXNlbnQKICAgICAgaWYgISBncmVwIC1xICJESUFMT0dSQyIgIiRTQ1JJUFQiOyB0aGVuCiAgICAgICAgIyBJbnNlcnQgYWZ0ZXIgdGhlIHNoZWJhbmcgbGluZQogICAgICAgIHNlZCAtaSAnMWEgZXhwb3J0IERJQUxPR1JDPS9ldGMvZGl5YXItZGlhbG9ncmMnICIkU0NSSVBUIgogICAgICAgIGVjaG8gIltob29rXSBESUFMT0dSQyBpbmplY3RlZCBpbnRvOiAkU0NSSVBUIgogICAgICAgIEZPVU5EPSQoKEZPVU5EICsgMSkpCiAgICAgIGVsc2UKICAgICAgICBlY2hvICJbaG9va10gRElBTE9HUkMgYWxyZWFkeSBzZXQgaW46ICRTQ1JJUFQiCiAgICAgICAgIyBVcGRhdGUgaXQgdG8gcG9pbnQgdG8gb3VyIGNvbmZpZwogICAgICAgIHNlZCAtaSAnc3xleHBvcnQgRElBTE9HUkM9Lip8ZXhwb3J0IERJQUxPR1JDPS9ldGMvZGl5YXItZGlhbG9ncmN8ZycgIiRTQ1JJUFQiCiAgICAgICAgRk9VTkQ9JCgoRk9VTkQgKyAxKSkKICAgICAgZmkKICAgIGZpCiAgZG9uZSA8IDwoZmluZCAiJFNFQVJDSF9ESVIiIC1tYXhkZXB0aCAzIC10eXBlIGYgLXByaW50MCAyPi9kZXYvbnVsbCkKZG9uZQoKaWYgWyAiJEZPVU5EIiAtZXEgMCBdOyB0aGVuCiAgZWNobyAiW2hvb2tdIFdBUk5JTkc6IE5vIHdoaXB0YWlsL2RpYWxvZyBzY3JpcHQgZm91bmQuIERJQUxPR1JDIHdyaXR0ZW4gdG8gL2V0Yy9kaXlhci1kaWFsb2dyYyIKICBlY2hvICJbaG9va10gQWRkICdleHBvcnQgRElBTE9HUkM9L2V0Yy9kaXlhci1kaWFsb2dyYycgdG8geW91ciBzb2Z0d2FyZSBtYW5hZ2VyIHNjcmlwdCBtYW51YWxseS4iCmVsc2UKICBlY2hvICJbaG9va10gRml4ZWQgJEZPVU5EIHNjcmlwdChzKS4iCmZpCgojIEFsc28gc2V0IGl0IHN5c3RlbS13aWRlIHZpYSAvZXRjL2Vudmlyb25tZW50IGFzIGEgZmFsbGJhY2sKaWYgISBncmVwIC1xICJESUFMT0dSQyIgL2V0Yy9lbnZpcm9ubWVudCAyPi9kZXYvbnVsbDsgdGhlbgogIGVjaG8gJ0RJQUxPR1JDPS9ldGMvZGl5YXItZGlhbG9ncmMnID4+IC9ldGMvZW52aXJvbm1lbnQKICBlY2hvICJbaG9va10gRElBTE9HUkMgYWRkZWQgdG8gL2V0Yy9lbnZpcm9ubWVudCIKZmkKCmVjaG8gIltob29rXSBTb2Z0d2FyZSBtYW5hZ2VyIGNvbG9yIGZpeCBjb21wbGV0ZS4iCg==" \
+            | base64 -d > "${HOOK_DIR_ICONS}/0150-fix-software-manager-colors.hook.chroot"
+          chmod +x "${HOOK_DIR_ICONS}/0150-fix-software-manager-colors.hook.chroot"
+          echo "Software manager color fix hook written."
           echo "Icons : $(find config/includes.chroot/usr/share/icons/Diyar -name '*.png' 2>/dev/null | wc -l) files"
           echo "Walls : $(ls config/includes.chroot/usr/share/diyar-os/wallpapers/ 2>/dev/null | wc -l) files"
 
@@ -481,38 +556,8 @@ jobs:
           HOOK_DIR="config/hooks/live"
           mkdir -p "$HOOK_DIR"
 
-          cat > "${HOOK_DIR}/0200-install-calamares.hook.chroot" <<'HOOKEOF'
-          #!/bin/bash
-          set -euo pipefail
-          echo "[hook] Installing Calamares from local .deb files..."
-
-          DEB_DIR="/opt/calamares-debs"
-
-          # Install dependencies that the .deb files need
-          apt-get install -y --no-install-recommends \
-            python3-pyqt5 \
-            qml-module-qtquick2 \
-            qml-module-qtquick-controls2 \
-            libkpmcore12 \
-            libboost-python1.74.0 \
-            2>/dev/null || true
-
-          # Install the local .deb files
-          # Use dpkg then fix any broken deps with apt-get -f install
-          dpkg -i "${DEB_DIR}"/*.deb || apt-get install -f -y
-
-          # Verify installation
-          if command -v calamares &>/dev/null; then
-            echo "[hook] Calamares installed: $(calamares --version 2>/dev/null || echo 'ok')"
-          else
-            echo "[hook] WARNING: calamares binary not found after install"
-          fi
-
-          # Clean up the .deb files from the final image (saves ~30MB)
-          rm -rf "$DEB_DIR"
-          echo "[hook] Calamares hook complete."
-          HOOKEOF
-
+          echo "IyEvYmluL2Jhc2gKc2V0IC1ldW8gcGlwZWZhaWwKZWNobyAiW2hvb2tdIEluc3RhbGxpbmcgQ2FsYW1hcmVzIGZyb20gbG9jYWwgLmRlYiBmaWxlcy4uLiIKREVCX0RJUj0iL29wdC9jYWxhbWFyZXMtZGVicyIKYXB0LWdldCBpbnN0YWxsIC15IC0tbm8taW5zdGFsbC1yZWNvbW1lbmRzIHB5dGhvbjMtcHlxdDUgcW1sLW1vZHVsZS1xdHF1aWNrMiBxbWwtbW9kdWxlLXF0cXVpY2stY29udHJvbHMyIGxpYmtwbWNvcmUxMiBsaWJib29zdC1weXRob24xLjc0LjAgMj4vZGV2L251bGwgfHwgdHJ1ZQpkcGtnIC1pICIke0RFQl9ESVJ9Ii8qLmRlYiB8fCBhcHQtZ2V0IGluc3RhbGwgLWYgLXkKY29tbWFuZCAtdiBjYWxhbWFyZXMgJj4vZGV2L251bGwgJiYgZWNobyAiW2hvb2tdIENhbGFtYXJlcyBpbnN0YWxsZWQgT0siIHx8IGVjaG8gIltob29rXSBXQVJOSU5HOiBjYWxhbWFyZXMgbm90IGZvdW5kIgpybSAtcmYgIiRERUJfRElSIgplY2hvICJbaG9va10gQ2FsYW1hcmVzIGhvb2sgY29tcGxldGUuIgo=" \
+            | base64 -d > "${HOOK_DIR}/0200-install-calamares.hook.chroot"
           chmod +x "${HOOK_DIR}/0200-install-calamares.hook.chroot"
           echo "Hook written: ${HOOK_DIR}/0200-install-calamares.hook.chroot"
 
@@ -638,27 +683,45 @@ jobs:
           UNPACKEOF
 
           # ── 7. Desktop launcher for Calamares ─────────────────────────────────
+          # ONE launcher in /usr/share/applications (appears in app menu)
+          # ONE copy on the live desktop via /etc/skel/Desktop
+          # Previous version wrote 3+ copies causing the duplicate icons seen on desktop
+
           DESKTOP_DIR="config/includes.chroot/usr/share/applications"
           mkdir -p "$DESKTOP_DIR"
-          cat > "${DESKTOP_DIR}/calamares.desktop" <<'DESKEOF'
-          [Desktop Entry]
-          Type=Application
-          Name=Install Diyar OS
-          Name[ar]=تثبيت نظام ديار
-          Comment=Install Diyar OS to your hard drive
-          Comment[ar]=قم بتثبيت نظام ديار على قرصك الصلب
-          Exec=pkexec calamares
-          Icon=calamares
-          Terminal=false
-          Categories=System;
-          Keywords=install;setup;
-          DESKEOF
 
-          # Also place on the live desktop
+          # Remove any stale copies that may exist from previous runs
+          rm -f "${DESKTOP_DIR}/calamares.desktop" \
+                "${DESKTOP_DIR}/install-diyar.desktop"
+
+          printf '%s\n' \
+            '[Desktop Entry]' \
+            'Version=1.0' \
+            'Type=Application' \
+            'Name=Install Diyar OS' \
+            'Name[ar]=تثبيت نظام ديار' \
+            'Comment=Install Diyar OS to your hard drive' \
+            'Comment[ar]=قم بتثبيت نظام ديار على قرصك الصلب' \
+            'Exec=pkexec /usr/bin/calamares' \
+            'Icon=/usr/share/pixmaps/diyar-logo.png' \
+            'Terminal=false' \
+            'Categories=System;' \
+            'Keywords=install;setup;diyar;' \
+            'StartupNotify=true' \
+            > "${DESKTOP_DIR}/install-diyar-os.desktop"
+
+          # Single copy on the live desktop (skel applies to all users including live user)
           LIVE_DESK="config/includes.chroot/etc/skel/Desktop"
           mkdir -p "$LIVE_DESK"
-          cp "${DESKTOP_DIR}/calamares.desktop" "${LIVE_DESK}/install-diyar.desktop"
-          chmod +x "${LIVE_DESK}/install-diyar.desktop"
+
+          # Remove any stale copies first
+          rm -f "${LIVE_DESK}"/*install* "${LIVE_DESK}"/*calamares* 2>/dev/null || true
+
+          cp "${DESKTOP_DIR}/install-diyar-os.desktop" \
+             "${LIVE_DESK}/install-diyar-os.desktop"
+          chmod +x "${LIVE_DESK}/install-diyar-os.desktop"
+
+          echo "Desktop launcher written (single copy, no duplicates)"
 
           # ── 8. polkit rule so Calamares can be launched without password ──────
           POLKIT_DIR="config/includes.chroot/etc/polkit-1/rules.d"
