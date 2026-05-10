@@ -35,4 +35,5 @@ lb config noauto \
     --debootstrap-options    "--keyring=/usr/share/keyrings/debian-archive-keyring.gpg" \
     --memtest                none \
     --zsync                  false \
+    --net                    true \
     "${@}"
