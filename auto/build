@@ -12,7 +12,33 @@ if [ "$(id -u)" -ne 0 ]; then
 fi
 
 echo "[auto/build] live-build version: $(lb --version)"
-echo "[auto/build] Working directory: $(pwd)"
-echo "[auto/build] Starting lb build..."
+echo "[auto/build] Working directory:  $(pwd)"
+echo "[auto/build] Start time:         $(date '+%Y-%m-%d %H:%M:%S')"
+echo "[auto/build] Disk space before:"
+df -h . | tail -1
 
+BUILD_START=$(date +%s)
+
+# Run the build — all output goes to stdout/stderr (captured by GitHub Actions log)
 lb build noauto "${@}"
+
+BUILD_END=$(date +%s)
+ELAPSED=$(( BUILD_END - BUILD_START ))
+MINUTES=$(( ELAPSED / 60 ))
+SECONDS=$(( ELAPSED % 60 ))
+
+echo ""
+echo "[auto/build] ============================================"
+echo "[auto/build] Build complete in ${MINUTES}m ${SECONDS}s"
+echo "[auto/build] Disk space after:"
+df -h . | tail -1
+
+# Report ISO size
+ISO_FILE=$(find . -maxdepth 1 -name "*.iso" | head -1)
+if [ -n "$ISO_FILE" ]; then
+    ISO_SIZE=$(du -sh "$ISO_FILE" | cut -f1)
+    echo "[auto/build] ISO: $ISO_FILE ($ISO_SIZE)"
+else
+    echo "[auto/build] WARNING: No .iso file found in working directory"
+fi
+echo "[auto/build] ============================================"

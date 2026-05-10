@@ -4,4 +4,7 @@
 # auto/clean
 # =============================================================================
 set -e
+
+echo "[auto/clean] Cleaning live-build artifacts..."
 lb clean noauto "${@}"
+echo "[auto/clean] Clean complete."
