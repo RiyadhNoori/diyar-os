@@ -22,7 +22,6 @@ lb config noauto \
     --iso-publisher          "Diyar OS Project" \
     --iso-volume             "${ISO_VOLUME}" \
     --bootappend-live        "boot=live components quiet splash locales=ar_IQ.UTF-8 keyboard-layouts=ara,us timezone=Asia/Baghdad hostname=diyar-live username=diyar" \
-    --linux-packages         "linux-image-amd64 linux-headers-amd64" \
     --mirror-bootstrap       "http://deb.debian.org/debian/" \
     --mirror-chroot          "https://deb.debian.org/debian/" \
     --mirror-binary          "https://deb.debian.org/debian/" \
