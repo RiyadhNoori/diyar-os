@@ -309,18 +309,39 @@ jobs:
           echo "aW1wb3J0IG9zLCBnbG9iCgpkZXNrdG9wID0gIiIiIyBYRkNFNCBEZXNrdG9wCnhmY2U0CnhmY2U0LWdvb2RpZXMKeGZjZTQtdGVybWluYWwKeGZjZTQtdGFza21hbmFnZXIKeGZjZTQtc2NyZWVuc2hvb3Rlcgp4ZmNlNC1ub3RpZnlkCnhmY2U0LXBvd2VyLW1hbmFnZXIKeGZjb25mCnRodW5hcgp0aHVuYXItYXJjaGl2ZS1wbHVnaW4KdGh1bmFyLXZvbG1hbgp0dW1ibGVyCmZpbGUtcm9sbGVyCm1vdXNlcGFkCnJpc3RyZXR0bwojIERpc3BsYXkgbWFuYWdlcgpsaWdodGRtCmxpZ2h0ZG0tZ3RrLWdyZWV0ZXIKbGlnaHRkbS1ndGstZ3JlZXRlci1zZXR0aW5ncwojIE5ldHdvcmsKbmV0d29yay1tYW5hZ2VyCm5ldHdvcmstbWFuYWdlci1nbm9tZQpuZXR3b3JrLW1hbmFnZXItb3BlbnZwbgpuZXR3b3JrLW1hbmFnZXItb3BlbnZwbi1nbm9tZQojIEF1ZGlvL1ZpZGVvCnB1bHNlYXVkaW8KcGF2dWNvbnRyb2wKdmxjCiMgRm9udHMKZm9udHMtbm90bwpmb250cy1ub3RvLWNvbG9yLWVtb2ppCmZvbnRzLW5vdG8tY2prCmZvbnRzLWxpYmVyYXRpb24KZm9udHMtYXJhYmV5ZXMKZm9udHMta2Fjc3QKZm9udHMtaG9zbnktYW1pcmkKIyBBcmFiaWMgbG9jYWxlCmxvY2FsZXMKYXNwZWxsLWFyCmh1bnNwZWxsLWFyCiMgU3lzdGVtIHV0aWxpdGllcwpiYXNoLWNvbXBsZXRpb24KY3VybAp3Z2V0CmdpdApodG9wCm5lb2ZldGNoCmdwYXJ0ZWQKZ25vbWUtZGlzay11dGlsaXR5CnVkaXNrczIKdXBvd2VyCmJsdWVtYW4KZGlhbG9nCndoaXB0YWlsCiMgQXJjaGl2ZSB0b29scwpwN3ppcC1mdWxsCnVuemlwCnppcAojIEFjY2Vzc2liaWxpdHkKYXQtc3BpMi1jb3JlCiMgTGludXgga2VybmVsCmxpbnV4LWltYWdlLWFtZDY0CmxpbnV4LWhlYWRlcnMtYW1kNjQKIyBMaXZlIHN5c3RlbQpsaXZlLWJvb3QKbGl2ZS1jb25maWcKbGl2ZS1jb25maWctc3lzdGVtZAoiIiIKCmRldnRvb2xzID0gIiIiIyBEZXYgdG9vbHMgLSByZXF1aXJlcyB0aGlyZC1wYXJ0eSByZXBvcyAoMDA1MCBob29rKQpjb2RlCiMgQnVpbGQgZXNzZW50aWFscwpidWlsZC1lc3NlbnRpYWwKY21ha2UKZ2RiCmdjYwpnKysKbWFrZQpweXRob24zCnB5dGhvbjMtcGlwCnB5dGhvbjMtdmVudgppcHl0aG9uMwojIE5vZGUuanMgMjAgTFRTCm5vZGVqcwojIERvY2tlcgpkb2NrZXItY2UKZG9ja2VyLWNlLWNsaQpjb250YWluZXJkLmlvCmRvY2tlci1jb21wb3NlLXBsdWdpbgojIEdpdCBleHRyYXMKZ2l0LWxmcwpnaXRrCiMgRGF0YWJhc2UgdG9vbHMKc3FsaXRlMwpwb3N0Z3Jlc3FsLWNsaWVudApkZWZhdWx0LW15c3FsLWNsaWVudAoiIiIKCm9zLm1ha2VkaXJzKCJjb25maWcvcGFja2FnZS1saXN0cyIsIGV4aXN0X29rPVRydWUpCmV4aXN0aW5nID0gZ2xvYi5nbG9iKCJjb25maWcvcGFja2FnZS1saXN0cy8qLmxpc3QuY2hyb290IikKaGFzX3hmY2UgPSBhbnkoInhmY2U0IiBpbiBvcGVuKGYpLnJlYWQoKSBmb3IgZiBpbiBleGlzdGluZyBpZiBvcy5wYXRoLmV4aXN0cyhmKSkKaGFzX2RldiAgPSBhbnkoImRvY2tlciIgaW4gb3BlbihmKS5yZWFkKCkgZm9yIGYgaW4gZXhpc3RpbmcgaWYgb3MucGF0aC5leGlzdHMoZikpCgppZiBub3QgaGFzX3hmY2U6CiAgICB3aXRoIG9wZW4oImNvbmZpZy9wYWNrYWdlLWxpc3RzLzAxLWRlc2t0b3AubGlzdC5jaHJvb3QiLCAidyIpIGFzIGY6CiAgICAgICAgZi53cml0ZShkZXNrdG9wKQogICAgbiA9IGxlbihbbCBmb3IgbCBpbiBkZXNrdG9wLnNwbGl0bGluZXMoKSBpZiBsLnN0cmlwKCkgYW5kIG5vdCBsLnN0YXJ0c3dpdGgoIiMiKV0pCiAgICBwcmludChmIldyaXR0ZW4gMDEtZGVza3RvcC5saXN0LmNocm9vdCAoe259IHBhY2thZ2VzKSIpCmVsc2U6CiAgICBwcmludCgiWEZDRTQgbGlzdCBleGlzdHMg4oCUIHNraXBwaW5nIikKCmlmIG5vdCBoYXNfZGV2OgogICAgd2l0aCBvcGVuKCJjb25maWcvcGFja2FnZS1saXN0cy8wMi1kZXZ0b29scy5saXN0LmNocm9vdCIsICJ3IikgYXMgZjoKICAgICAgICBmLndyaXRlKGRldnRvb2xzKQogICAgbiA9IGxlbihbbCBmb3IgbCBpbiBkZXZ0b29scy5zcGxpdGxpbmVzKCkgaWYgbC5zdHJpcCgpIGFuZCBub3QgbC5zdGFydHN3aXRoKCIjIildKQogICAgcHJpbnQoZiJXcml0dGVuIDAyLWRldnRvb2xzLmxpc3QuY2hyb290ICh7bn0gcGFja2FnZXMpIikKZWxzZToKICAgIHByaW50KCJEZXYgdG9vbHMgbGlzdCBleGlzdHMg4oCUIHNraXBwaW5nIikKCmZvciBwYXRoIGluIHNvcnRlZChnbG9iLmdsb2IoImNvbmZpZy9wYWNrYWdlLWxpc3RzLyoubGlzdC5jaHJvb3QiKSk6CiAgICBiYWQgPSBbbCBmb3IgbCBpbiBvcGVuKHBhdGgpIGlmIGxbMDoxXSBpbiAoIiAiLCAiCSIpXQogICAgbiA9IGxlbihbbCBmb3IgbCBpbiBvcGVuKHBhdGgpIGlmIGwuc3RyaXAoKSBhbmQgbm90IGwuc3RhcnRzd2l0aCgiIyIpXSkKICAgIHN0YXR1cyA9IGYiV0FSTklORyB7bGVuKGJhZCl9IGxpbmVzIHdpdGggbGVhZGluZyB3aGl0ZXNwYWNlIiBpZiBiYWQgZWxzZSAiT0siCiAgICBwcmludChmIntzdGF0dXN9OiB7cGF0aH0gKHtufSBwYWNrYWdlcykiKQo=" | base64 -d | python3
           echo "Package lists written. Verifying no leading whitespace..."
 
-          # ── Third-party repos via config/archives/ (correct live-build mechanism) ──
-          # IMPORTANT: hooks run AFTER package installation — too late for repo setup.
-          # config/archives/*.list.chroot = apt sources added BEFORE lb installs packages
-          # config/archives/*.key.chroot  = GPG keys for those sources (binary .gpg format)
-          # This is the only correct way to add third-party repos in live-build.
+          # ── Third-party GPG keys for config/archives/ ────────────────────────────
+          # The repo already has config/archives/*.list.chroot committed — do NOT
+          # overwrite them (causes PermissionError on GitHub Actions).
+          # We only need to download the binary GPG keys which are not in the repo.
+          echo "Downloading GPG keys for third-party repos..."
+          mkdir -p config/archives
 
-          # Step 1: Write the apt source list files
-          echo "aW1wb3J0IG9zLCBiYXNlNjQKCm9zLm1ha2VkaXJzKCJjb25maWcvYXJjaGl2ZXMiLCBleGlzdF9vaz1UcnVlKQoKIyDilIDilIAgVlMgQ29kZSDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIAKd2l0aCBvcGVuKCJjb25maWcvYXJjaGl2ZXMvdnNjb2RlLmxpc3QuY2hyb290IiwgInciKSBhcyBmOgogICAgZi53cml0ZSgiZGViIFthcmNoPWFtZDY0IHNpZ25lZC1ieT0vZXRjL2FwdC9rZXlyaW5ncy9taWNyb3NvZnQuZ3BnXSBodHRwczovL3BhY2thZ2VzLm1pY3Jvc29mdC5jb20vcmVwb3MvY29kZSBzdGFibGUgbWFpblxuIikKCiMg4pSA4pSAIE5vZGUuanMgMjAgTFRTIOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgAp3aXRoIG9wZW4oImNvbmZpZy9hcmNoaXZlcy9ub2Rlc291cmNlLmxpc3QuY2hyb290IiwgInciKSBhcyBmOgogICAgZi53cml0ZSgiZGViIFtzaWduZWQtYnk9L2V0Yy9hcHQva2V5cmluZ3Mvbm9kZXNvdXJjZS5ncGddIGh0dHBzOi8vZGViLm5vZGVzb3VyY2UuY29tL25vZGVfMjAueCBub2Rpc3RybyBtYWluXG4iKQoKIyDilIDilIAgRG9ja2VyIOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgAp3aXRoIG9wZW4oImNvbmZpZy9hcmNoaXZlcy9kb2NrZXIubGlzdC5jaHJvb3QiLCAidyIpIGFzIGY6CiAgICBmLndyaXRlKCJkZWIgW2FyY2g9YW1kNjQgc2lnbmVkLWJ5PS9ldGMvYXB0L2tleXJpbmdzL2RvY2tlci5ncGddIGh0dHBzOi8vZG93bmxvYWQuZG9ja2VyLmNvbS9saW51eC9kZWJpYW4gYm9va3dvcm0gc3RhYmxlXG4iKQoKcHJpbnQoImNvbmZpZy9hcmNoaXZlcy8gc291cmNlcyB3cml0dGVuOiIpCmZvciBmIGluIHNvcnRlZChvcy5saXN0ZGlyKCJjb25maWcvYXJjaGl2ZXMiKSk6CiAgICBwcmludChmIiAge2Z9IikK" | base64 -d | python3
+          # VS Code / Microsoft
+          if [ ! -f config/archives/vscode.key.chroot ]; then
+            wget -qO- https://packages.microsoft.com/keys/microsoft.asc               | gpg --dearmor > config/archives/vscode.key.chroot
+            echo "VSCode key downloaded"
+          else
+            echo "VSCode key already present"
+          fi
 
-          # Step 2: Download GPG keys onto the HOST (before lb build starts)
-          echo "IyEvYmluL2Jhc2gKc2V0IC1ldW8gcGlwZWZhaWwKZWNobyAiW2tleXNdIERvd25sb2FkaW5nIEdQRyBrZXlzIGZvciB0aGlyZC1wYXJ0eSByZXBvcy4uLiIKCm1rZGlyIC1wIGNvbmZpZy9hcmNoaXZlcwoKIyDilIDilIAgVlMgQ29kZSAvIE1pY3Jvc29mdCDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIAKaWYgWyAhIC1mIGNvbmZpZy9hcmNoaXZlcy92c2NvZGUua2V5LmNocm9vdCBdOyB0aGVuCiAgd2dldCAtcU8tIGh0dHBzOi8vcGFja2FnZXMubWljcm9zb2Z0LmNvbS9rZXlzL21pY3Jvc29mdC5hc2MgXAogICAgfCBncGcgLS1kZWFybW9yID4gY29uZmlnL2FyY2hpdmVzL3ZzY29kZS5rZXkuY2hyb290CiAgZWNobyAiW2tleXNdIFZTQ29kZSBrZXkgZG93bmxvYWRlZCIKZmkKCiMg4pSA4pSAIE5vZGUuanMgKE5vZGVTb3VyY2UpIOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgOKUgAppZiBbICEgLWYgY29uZmlnL2FyY2hpdmVzL25vZGVzb3VyY2Uua2V5LmNocm9vdCBdOyB0aGVuCiAgd2dldCAtcU8tIGh0dHBzOi8vZGViLm5vZGVzb3VyY2UuY29tL2dwZ2tleS9ub2Rlc291cmNlLXJlcG8uZ3BnLnB1YmxpYyBcCiAgICB8IGdwZyAtLWRlYXJtb3IgPiBjb25maWcvYXJjaGl2ZXMvbm9kZXNvdXJjZS5rZXkuY2hyb290CiAgZWNobyAiW2tleXNdIE5vZGVTb3VyY2Uga2V5IGRvd25sb2FkZWQiCmZpCgojIOKUgOKUgCBEb2NrZXIg4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSA4pSACmlmIFsgISAtZiBjb25maWcvYXJjaGl2ZXMvZG9ja2VyLmtleS5jaHJvb3QgXTsgdGhlbgogIHdnZXQgLXFPLSBodHRwczovL2Rvd25sb2FkLmRvY2tlci5jb20vbGludXgvZGViaWFuL2dwZyBcCiAgICB8IGdwZyAtLWRlYXJtb3IgPiBjb25maWcvYXJjaGl2ZXMvZG9ja2VyLmtleS5jaHJvb3QKICBlY2hvICJba2V5c10gRG9ja2VyIGtleSBkb3dubG9hZGVkIgpmaQoKZWNobyAiW2tleXNdIEFsbCBHUEcga2V5cyByZWFkeSBpbiBjb25maWcvYXJjaGl2ZXMvIgpscyAtbGggY29uZmlnL2FyY2hpdmVzLyoua2V5LmNocm9vdAo=" | base64 -d | bash
-          echo "Third-party archives/ configured."
+          # Node.js (NodeSource)
+          if [ ! -f config/archives/nodesource.key.chroot ]; then
+            wget -qO- https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.public               | gpg --dearmor > config/archives/nodesource.key.chroot
+            echo "NodeSource key downloaded"
+          else
+            echo "NodeSource key already present"
+          fi
+
+          # Docker
+          if [ ! -f config/archives/docker.key.chroot ]; then
+            wget -qO- https://download.docker.com/linux/debian/gpg               | gpg --dearmor > config/archives/docker.key.chroot
+            echo "Docker key downloaded"
+          else
+            echo "Docker key already present"
+          fi
+
+          echo "GPG keys ready:"
+          ls -lh config/archives/*.key.chroot 2>/dev/null || echo "  (none found)"
 
           # Remove the old 0050 hook — it ran too late (after package install)
           rm -f config/hooks/live/0050-add-third-party-repos.hook.chroot
