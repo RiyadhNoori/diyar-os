@@ -274,9 +274,11 @@ jobs:
           VERSION="${{ steps.meta.outputs.version }}"
           VOLUME_LABEL="DIYAR_OS_$(echo "${VERSION}" | tr '.-' '_' | cut -c1-16)"
           echo "ISO_VOLUME=${VOLUME_LABEL}"
+          # XZ_OPT=-T0 tells xz to use all available CPU cores (much faster than single-threaded)
           sudo env \
             ISO_VOLUME="${VOLUME_LABEL}" \
-            ISO_COMPRESSION="zstd" \
+            ISO_COMPRESSION="xz" \
+            XZ_OPT="-T0" \
             bash auto/config
           echo "Configuration complete."
           echo "=== config/ tree ==="
