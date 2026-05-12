@@ -413,6 +413,19 @@ jobs:
 
           echo "Version metadata injected: ${VERSION}"
 
+      # ── Custom GRUB boot menu (Safe / Full / Install entries) ─────────────────
+      - name: Inject custom GRUB boot menu
+        run: |
+          # live-build places GRUB config in binary/boot/grub/grub.cfg
+          # We pre-create it in config/bootloaders/grub-pc/live-theme/
+          # which live-build copies verbatim into the ISO
+          mkdir -p config/bootloaders/grub-pc/live-theme
+
+          echo "aWYgbG9hZGZvbnQgL2Jvb3QvZ3J1Yi9mb250LnBmMiA7IHRoZW4KICBzZXQgZ2Z4bW9kZT1hdXRvCiAgaW5zbW9kIGVmaV9nb3AKICBpbnNtb2QgZWZpX3VnYQogIGluc21vZCBnZnh0ZXJtCiAgdGVybWluYWxfb3V0cHV0IGdmeHRlcm0KZmkKCnNldCBtZW51X2NvbG9yX25vcm1hbD13aGl0ZS9ibGFjawpzZXQgbWVudV9jb2xvcl9oaWdobGlnaHQ9YmxhY2sveWVsbG93CnNldCB0aW1lb3V0PTEwCnNldCBkZWZhdWx0PTAKCm1lbnVlbnRyeSAi2KrYrNix2KjYqSDZhti42KfZhSDYr9mK2KfYsSAo2KLZhdmGIC0g2YXZiNi12Ykg2KjZhykiIC0taG90a2V5PTEgewogICAgc2V0IGJhY2tncm91bmRfY29sb3I9YmxhY2sKICAgIGxpbnV4ICAgL2xpdmUvdm1saW51eiBib290PWxpdmUgY29tcG9uZW50cyBxdWlldCBub3BseW1vdXRoIG5vZWplY3Qgbm9tb2Rlc2V0IGxvY2FsZXM9YXJfSVEuVVRGLTgga2V5Ym9hcmQtbGF5b3V0cz1hcmEsdXMgdGltZXpvbmU9QXNpYS9CYWdoZGFkIGhvc3RuYW1lPWRpeWFyLWxpdmUgdXNlcm5hbWU9ZGl5YXIKICAgIGluaXRyZCAgL2xpdmUvaW5pdHJkLmltZwp9CgptZW51ZW50cnkgIlRyeSBEaXlhciBPUyAoU2FmZSBNb2RlKSIgLS1ob3RrZXk9MiB7CiAgICBzZXQgYmFja2dyb3VuZF9jb2xvcj1ibGFjawogICAgbGludXggICAvbGl2ZS92bWxpbnV6IGJvb3Q9bGl2ZSBjb21wb25lbnRzIHF1aWV0IG5vcGx5bW91dGggbm9lamVjdCBub21vZGVzZXQgbG9jYWxlcz1hcl9JUS5VVEYtOCBrZXlib2FyZC1sYXlvdXRzPWFyYSx1cyB0aW1lem9uZT1Bc2lhL0JhZ2hkYWQgaG9zdG5hbWU9ZGl5YXItbGl2ZSB1c2VybmFtZT1kaXlhcgogICAgaW5pdHJkICAvbGl2ZS9pbml0cmQuaW1nCn0KCm1lbnVlbnRyeSAi2KrYrNix2KjYqSDZhti42KfZhSDYr9mK2KfYsSAo2YPYp9mF2YQg2KfZhNmF2YrYsdin2KopIiAtLWhvdGtleT0zIHsKICAgIHNldCBiYWNrZ3JvdW5kX2NvbG9yPWJsYWNrCiAgICBsaW51eCAgIC9saXZlL3ZtbGludXogYm9vdD1saXZlIGNvbXBvbmVudHMgc3BsYXNoIGxvY2FsZXM9YXJfSVEuVVRGLTgga2V5Ym9hcmQtbGF5b3V0cz1hcmEsdXMgdGltZXpvbmU9QXNpYS9CYWdoZGFkIGhvc3RuYW1lPWRpeWFyLWxpdmUgdXNlcm5hbWU9ZGl5YXIKICAgIGluaXRyZCAgL2xpdmUvaW5pdHJkLmltZwp9CgptZW51ZW50cnkgIlRyeSBEaXlhciBPUyAoRnVsbCBGZWF0dXJlcykiIC0taG90a2V5PTQgewogICAgc2V0IGJhY2tncm91bmRfY29sb3I9YmxhY2sKICAgIGxpbnV4ICAgL2xpdmUvdm1saW51eiBib290PWxpdmUgY29tcG9uZW50cyBzcGxhc2ggbG9jYWxlcz1hcl9JUS5VVFAtOCBrZXlib2FyZC1sYXlvdXRzPWFyYSx1cyB0aW1lem9uZT1Bc2lhL0JhZ2hkYWQgaG9zdG5hbWU9ZGl5YXItbGl2ZSB1c2VybmFtZT1kaXlhcgogICAgaW5pdHJkICAvbGl2ZS9pbml0cmQuaW1nCn0KCm1lbnVlbnRyeSAi2KrZhti12YrYqCDZhti42KfZhSDYr9mK2KfYsSIgLS1ob3RrZXk9NSB7CiAgICBzZXQgYmFja2dyb3VuZF9jb2xvcj1ibGFjawogICAgbGludXggICAvbGl2ZS92bWxpbnV6IGJvb3Q9bGl2ZSBjb21wb25lbnRzIHF1aWV0IG5vcGx5bW91dGggbm9lamVjdCBub21vZGVzZXQgbG9jYWxlcz1hcl9JUS5VVEYtOCBrZXlib2FyZC1sYXlvdXRzPWFyYSx1cyB0aW1lem9uZT1Bc2lhL0JhZ2hkYWQgaG9zdG5hbWU9ZGl5YXItbGl2ZSB1c2VybmFtZT1kaXlhcgogICAgaW5pdHJkICAvbGl2ZS9pbml0cmQuaW1nCn0KCm1lbnVlbnRyeSAiSW5zdGFsbCBEaXlhciBPUyIgLS1ob3RrZXk9NiB7CiAgICBzZXQgYmFja2dyb3VuZF9jb2xvcj1ibGFjawogICAgbGludXggICAvbGl2ZS92bWxpbnV6IGJvb3Q9bGl2ZSBjb21wb25lbnRzIHF1aWV0IG5vcGx5bW91dGggbm9lamVjdCBub21vZGVzZXQgbG9jYWxlcz1hcl9JUS5VVEYtOCBrZXlib2FyZC1sYXlvdXRzPWFyYSx1cyB0aW1lem9uZT1Bc2lhL0JhZ2hkYWQgaG9zdG5hbWU9ZGl5YXItbGl2ZSB1c2VybmFtZT1kaXlhcgogICAgaW5pdHJkICAvbGl2ZS9pbml0cmQuaW1nCn0KCm1lbnVlbnRyeSAi2YHYrdi1INiw2KfZg9ix2Kkg2KfZhNmI2LXZiNmEINin2YTYudi02YrYp9im2YogLyBSQU0gVGVzdCIgewogICAgbGludXgxNiAvYm9vdC9tZW10ZXN0ODYrLmJpbgp9Cg==" | base64 -d > config/bootloaders/grub-pc/grub.cfg
+          echo "Custom GRUB menu written with Safe/Full/Install entries."
+          echo "Boot menu entries:"
+          grep "^menuentry" config/bootloaders/grub-pc/grub.cfg
+
       # ── Build & inject branding (icons + wallpapers) ─────────────────────────
       - name: Build and inject branding assets
         run: |
