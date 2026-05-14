@@ -475,54 +475,7 @@ jobs:
           fi
           
           echo "[branding] Branding injection complete."
-          
-          # ── Fix the typo: repo folder is 'assets' not 'assets' ──────────────
-          # build-icons.sh looks for ASSETS_DIR="${ROOT_DIR}/assets"
-          # The real folder is 'assets' — create a symlink so the script finds it
-          if [[ -d "assets" && ! -d "assets" ]]; then
-            ln -s "$(pwd)/assets" "$(pwd)/assets"
-            echo "Symlink created: assets → assets"
-          fi
-
-          # Ensure the script is executable
-          chmod +x scripts/build-icons.sh
-
-          # Run the icon/wallpaper builder
-          bash scripts/build-icons.sh
-
-          # ── Copy icon theme into live-build includes ──────────────────────────
-          # live-build copies config/includes.chroot/* verbatim into the ISO root.
-          # diyar-icons/ lives at the repo root — copy it to where live-build reads.
-          ICON_DEST="config/includes.chroot/usr/share/icons/Diyar"
-          mkdir -p "$ICON_DEST"
-          # Copy index.theme from diyar-icons/
-          if [[ -f "diyar-icons/index.theme" ]]; then
-            cp diyar-icons/index.theme "$ICON_DEST/"
-            echo "Copied diyar-icons/index.theme"
-          fi
-          # Copy actual PNGs from assets/
-          # Copy actual icon files from assets/
-          if [[ -d "assets" ]]; then
-            ICON_COUNT=$(find assets -type f 2>/dev/null | wc -l)
-            if [[ $ICON_COUNT -gt 0 ]]; then
-              cp -r assets/. "$ICON_DEST/" 2>/dev/null || true
-              echo "Icons copied from assets/: $(find "$ICON_DEST" -type f | wc -l) files"
-              echo "INFO: assets/ is empty"
-            fi
-            echo "INFO: assets/ not found"
-          fi
-            echo "INFO: assets/ icons not found"
-
-          # ── Copy wallpapers ───────────────────────────────────────────────────
-          # build-icons.sh writes wallpapers/ relative to ROOT_DIR
-          WALL_SRC="$(find . -type d -name "wallpapers" | grep -v "includes.chroot" | head -1)"
-          if [[ -n "$WALL_SRC" ]]; then
-            WALL_DEST="config/includes.chroot/usr/share/diyar-os/wallpapers"
-            mkdir -p "$WALL_DEST"
-            cp -r "${WALL_SRC}/." "$WALL_DEST/"
-            echo "Wallpapers copied: $(ls "$WALL_DEST" | wc -l) files"
-          else
-            echo "WARNING: wallpapers/ not found after build-icons.sh — skipping"
+          # Section complete - no more asset copying needed
           fi
 
           # ── Copy logo to pixmaps ──────────────────────────────────────────────
