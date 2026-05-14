@@ -454,9 +454,18 @@ jobs:
             echo "Copied diyar-icons/index.theme"
           fi
           # Copy actual PNGs from asstets/
-          if [[ -d "asstets" && $(find asstets -name "*.png" -o -name "*.svg" | wc -l) -gt 0 ]]; then
-            cp -r asstets/. "$ICON_DEST/" 2>/dev/null || true
-            echo "Icons copied from asstets/: $(find "$ICON_DEST" -type f | wc -l) files"
+          # Copy actual icon files from asstets/
+          if [[ -d "asstets" ]]; then
+            ICON_COUNT=$(find asstets -type f 2>/dev/null | wc -l)
+            if [[ $ICON_COUNT -gt 0 ]]; then
+              cp -r asstets/. "$ICON_DEST/" 2>/dev/null || true
+              echo "Icons copied from asstets/: $(find "$ICON_DEST" -type f | wc -l) files"
+            else
+              echo "INFO: asstets/ is empty"
+            fi
+          else
+            echo "INFO: asstets/ not found"
+          fi
           else
             echo "INFO: asstets/ icons not found"
           fi
