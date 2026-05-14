@@ -430,9 +430,9 @@ jobs:
           set -euo pipefail
           echo "[branding] Starting branding injection..."
           
-          # Create symlink for typo in asstets folder
-          if [[ -d "asstets" && ! -d "assets" ]]; then
-            ln -s "$(pwd)/asstets" "$(pwd)/assets"
+          # Create symlink for typo in assets folder
+          if [[ -d "assets" && ! -d "assets" ]]; then
+            ln -s "$(pwd)/assets" "$(pwd)/assets"
           fi
           
           # Run build-icons script (optional, may fail)
@@ -445,29 +445,43 @@ jobs:
           mkdir -p "$ICON_DEST"
           [[ -f "diyar-icons/index.theme" ]] && cp diyar-icons/index.theme "$ICON_DEST/" || true
           
-          # Copy PNG files from asstets/
-          if [[ -d "asstets" ]]; then
-            find asstets -type f \( -name "*.png" -o -name "*.svg" \) -exec cp --parents {} "$ICON_DEST/" \; 2>/dev/null || true
-            ICON_COUNT=$(find "$ICON_DEST" -type f 2>/dev/null | wc -l)
-            echo "[branding] Icons: $ICON_COUNT files"
+          # Copy PNG/SVG files from assets/ — search all subdirs
+          if [[ -d "assets" ]]; then
+            # Find all icon files recursively
+            ICON_FILES=$(find assets -type f \( -name "*.png" -o -name "*.svg" \) 2>/dev/null)
+            if [[ -n "$ICON_FILES" ]]; then
+              echo "[branding] Found icon files:"
+              echo "$ICON_FILES" | head -5
+              # Copy preserving directory structure
+              while IFS= read -r file; do
+                mkdir -p "$ICON_DEST/$(dirname "${file#assets/}")"
+                cp "$file" "$ICON_DEST/$(dirname "${file#assets/}")/" 2>/dev/null || true
+              done <<< "$ICON_FILES"
+              ICON_COUNT=$(find "$ICON_DEST" -type f 2>/dev/null | wc -l)
+              echo "[branding] Icons copied: $ICON_COUNT files"
+            else
+              echo "[branding] No PNG/SVG files found in assets/"
+            fi
+          else
+            echo "[branding] assets/ directory not found"
           fi
           
           # Copy wallpapers
-          if [[ -d "asstets/wallpapers" ]]; then
+          if [[ -d "assets/wallpapers" ]]; then
             WALL_DEST="config/includes.chroot/usr/share/diyar-os/wallpapers"
             mkdir -p "$WALL_DEST"
-            cp -r asstets/wallpapers/* "$WALL_DEST/" 2>/dev/null || true
+            cp -r assets/wallpapers/* "$WALL_DEST/" 2>/dev/null || true
             echo "[branding] Wallpapers: $(ls "$WALL_DEST" 2>/dev/null | wc -l) files"
           fi
           
           echo "[branding] Branding injection complete."
           
-          # ── Fix the typo: repo folder is 'asstets' not 'assets' ──────────────
+          # ── Fix the typo: repo folder is 'assets' not 'assets' ──────────────
           # build-icons.sh looks for ASSETS_DIR="${ROOT_DIR}/assets"
-          # The real folder is 'asstets' — create a symlink so the script finds it
-          if [[ -d "asstets" && ! -d "assets" ]]; then
-            ln -s "$(pwd)/asstets" "$(pwd)/assets"
-            echo "Symlink created: assets → asstets"
+          # The real folder is 'assets' — create a symlink so the script finds it
+          if [[ -d "assets" && ! -d "assets" ]]; then
+            ln -s "$(pwd)/assets" "$(pwd)/assets"
+            echo "Symlink created: assets → assets"
           fi
 
           # Ensure the script is executable
@@ -486,18 +500,18 @@ jobs:
             cp diyar-icons/index.theme "$ICON_DEST/"
             echo "Copied diyar-icons/index.theme"
           fi
-          # Copy actual PNGs from asstets/
-          # Copy actual icon files from asstets/
-          if [[ -d "asstets" ]]; then
-            ICON_COUNT=$(find asstets -type f 2>/dev/null | wc -l)
+          # Copy actual PNGs from assets/
+          # Copy actual icon files from assets/
+          if [[ -d "assets" ]]; then
+            ICON_COUNT=$(find assets -type f 2>/dev/null | wc -l)
             if [[ $ICON_COUNT -gt 0 ]]; then
-              cp -r asstets/. "$ICON_DEST/" 2>/dev/null || true
-              echo "Icons copied from asstets/: $(find "$ICON_DEST" -type f | wc -l) files"
-              echo "INFO: asstets/ is empty"
+              cp -r assets/. "$ICON_DEST/" 2>/dev/null || true
+              echo "Icons copied from assets/: $(find "$ICON_DEST" -type f | wc -l) files"
+              echo "INFO: assets/ is empty"
             fi
-            echo "INFO: asstets/ not found"
+            echo "INFO: assets/ not found"
           fi
-            echo "INFO: asstets/ icons not found"
+            echo "INFO: assets/ icons not found"
 
           # ── Copy wallpapers ───────────────────────────────────────────────────
           # build-icons.sh writes wallpapers/ relative to ROOT_DIR
