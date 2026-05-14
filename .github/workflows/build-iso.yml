@@ -476,7 +476,7 @@ jobs:
           
           echo "[branding] Branding injection complete."
           # Section complete - no more asset copying needed
-          fi
+
 
           # ── Copy logo to pixmaps ──────────────────────────────────────────────
           LOGO="$(find . -path "*/output/logo/diyar-logo-256.png" | head -1)"
