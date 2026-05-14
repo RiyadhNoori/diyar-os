@@ -448,11 +448,18 @@ jobs:
           # diyar-icons/ lives at the repo root — copy it to where live-build reads.
           ICON_DEST="config/includes.chroot/usr/share/icons/Diyar"
           mkdir -p "$ICON_DEST"
-          if [[ -d "diyar-icons" ]]; then
-            cp -r diyar-icons/. "$ICON_DEST/"
-            echo "Icons copied from diyar-icons/: $(find "$ICON_DEST" -name "*.png" | wc -l) PNG files"
+          # Copy index.theme from diyar-icons/
+          if [[ -f "diyar-icons/index.theme" ]]; then
+            cp diyar-icons/index.theme "$ICON_DEST/"
+            echo "Copied diyar-icons/index.theme"
+          fi
+          # Copy actual PNGs from asstets/
+          if [[ -d "asstets" && $(find asstets -name "*.png" -o -name "*.svg" | wc -l) -gt 0 ]]; then
+            cp -r asstets/. "$ICON_DEST/" 2>/dev/null || true
+            echo "Icons copied from asstets/: $(find "$ICON_DEST" -type f | wc -l) files"
           else
-            echo "WARNING: diyar-icons/ not found at repo root — skipping icon copy"
+            echo "INFO: asstets/ icons not found"
+          fi
           fi
 
           # ── Copy wallpapers ───────────────────────────────────────────────────
@@ -485,7 +492,7 @@ jobs:
             '<?xml version="1.0" encoding="UTF-8"?>' \
             '<channel name="xsettings" version="1.0">' \
             '  <property name="Net" type="empty">' \
-            '    <property name="IconThemeName" type="string" value="Diyar"/>' \
+            '    <property name="IconThemeName" type="string" value="Diyar-Icons"/>' \
             '    <property name="ThemeName"     type="string" value="Adwaita-dark"/>' \
             '    <property name="CursorThemeName" type="string" value="Adwaita"/>' \
             '  </property>' \
