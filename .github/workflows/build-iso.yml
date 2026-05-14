@@ -429,12 +429,12 @@ jobs:
         run: |
           echo "=== Running build-icons.sh ==="
 
-          # ── Fix the typo: repo folder is 'asstets' not 'assets' ──────────────
+          # ── Fix the typo: repo folder is 'assets' not 'assets' ──────────────
           # build-icons.sh looks for ASSETS_DIR="${ROOT_DIR}/assets"
-          # The real folder is 'asstets' — create a symlink so the script finds it
-          if [[ -d "asstets" && ! -d "assets" ]]; then
-            ln -s "$(pwd)/asstets" "$(pwd)/assets"
-            echo "Symlink created: assets → asstets"
+          # The real folder is 'assets' — create a symlink so the script finds it
+          if [[ -d "assets" && ! -d "assets" ]]; then
+            ln -s "$(pwd)/assets" "$(pwd)/assets"
+            echo "Symlink created: assets → assets"
           fi
 
           # Ensure the script is executable
@@ -453,21 +453,21 @@ jobs:
             cp diyar-icons/index.theme "$ICON_DEST/"
             echo "Copied diyar-icons/index.theme"
           fi
-          # Copy actual PNGs from asstets/
-          # Copy actual icon files from asstets/
-          if [[ -d "asstets" ]]; then
-            ICON_COUNT=$(find asstets -type f 2>/dev/null | wc -l)
+          # Copy actual PNGs from assets/
+          # Copy actual icon files from assets/
+          if [[ -d "assets" ]]; then
+            ICON_COUNT=$(find assets -type f 2>/dev/null | wc -l)
             if [[ $ICON_COUNT -gt 0 ]]; then
-              cp -r asstets/. "$ICON_DEST/" 2>/dev/null || true
-              echo "Icons copied from asstets/: $(find "$ICON_DEST" -type f | wc -l) files"
+              cp -r assets/. "$ICON_DEST/" 2>/dev/null || true
+              echo "Icons copied from assets/: $(find "$ICON_DEST" -type f | wc -l) files"
             else
-              echo "INFO: asstets/ is empty"
+              echo "INFO: assets/ is empty"
             fi
           else
-            echo "INFO: asstets/ not found"
+            echo "INFO: assets/ not found"
           fi
           else
-            echo "INFO: asstets/ icons not found"
+            echo "INFO: assets/ icons not found"
           fi
           fi
 
