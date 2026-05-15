@@ -21,8 +21,8 @@ lb config noauto \
     --iso-application        "Diyar OS" \
     --iso-publisher          "Diyar OS Project" \
     --iso-volume             "${ISO_VOLUME}" \
-    --bootappend-live        "boot=live components quiet noplymouth noeject nomodeset locales=ar_IQ.UTF-8 keyboard-layouts=ara,us timezone=Asia/Baghdad hostname=diyar-live username=diyar" \
-    --bootappend-live-failsafe "boot=live components quiet noplymouth noeject nomodeset acpi=off noapic locales=ar_IQ.UTF-8 keyboard-layouts=ara,us timezone=Asia/Baghdad hostname=diyar-live username=diyar" \
+    --bootappend-live        "boot=live components quiet noplymouth noeject locales=ar_IQ.UTF-8 keyboard-layouts=ara,us timezone=Asia/Baghdad hostname=diyar-live username=diyar locales=ar_IQ.UTF-8 keyboard-layouts=ara,us timezone=Asia/Baghdad hostname=diyar-live username=diyar" \
+    --bootappend-live-failsafe "boot=live components quiet noplymouth noeject nomodeset 3 acpi=off noapic locales=ar_IQ.UTF-8 keyboard-layouts=ara,us timezone=Asia/Baghdad hostname=diyar-live username=diyar" \
     --mirror-bootstrap       "http://deb.debian.org/debian/" \
     --mirror-chroot          "https://deb.debian.org/debian/" \
     --mirror-binary          "https://deb.debian.org/debian/" \
@@ -31,6 +31,7 @@ lb config noauto \
     --apt                    apt \
     --apt-options            "--yes" \
     --apt-recommends         false \
+    --apt-indices             true \
     --compression            "${ISO_COMPRESSION}" \
     --chroot-filesystem      squashfs \
     --debootstrap-options    "--keyring=/usr/share/keyrings/debian-archive-keyring.gpg" \
