@@ -509,7 +509,7 @@ jobs:
 
 
           # ── Firmware and GPU drivers for hardware compatibility (2010-2024) ────
-          echo "IyBGaXJtd2FyZSBwYWNrYWdlcyBmb3IgV2lGaSwgQmx1ZXRvb3RoLCBHUFUKbGludXgtZmlybXdhcmUKZmlybXdhcmUtbGludXgKZmlybXdhcmUtbGludXgtZnJlZQpmaXJtd2FyZS1saW51eC1ub25mcmVlCmZpcm13YXJlLXJlYWx0ZWsKZmlybXdhcmUtYXRoZXJvcwpmaXJtd2FyZS1pd2x3aWZpCmZpcm13YXJlLWJyY204MDIxMQoKIyBHUFUgZHJpdmVycyAob3BlbiBzb3VyY2UpCnhzZXJ2ZXIteG9yZy12aWRlby1ub3V2ZWF1CnhzZXJ2ZXIteG9yZy12aWRlby1hdGkKeHNlcnZlci14b3JnLXZpZGVvLWludGVsCnhzZXJ2ZXIteG9yZy12aWRlby1hbWRncHUKeHNlcnZlci14b3JnLXZpZGVvLWZiZGV2CnhzZXJ2ZXIteG9yZy12aWRlby12ZXNhCgojIFdpcmVsZXNzCndwYXN1cHBsaWNhbnQKd2lyZWxlc3MtdG9vbHMKaXcKaXdkCmJsdWV6CmJsdWV6LWZpcm13YXJlCgojIFBvd2VyIG1hbmFnZW1lbnQKcG0tdXRpbHMKcG93ZXJ0b3AK" | base64 -d > config/package-lists/07-firmware-drivers.list.chroot
+          echo "ZmlybXdhcmUtcmVhbHRlawpmaXJtd2FyZS1hdGhlcm9zCmZpcm13YXJlLWl3bHdpZmkKZmlybXdhcmUtYnJjbTgwMjExCnhzZXJ2ZXIteG9yZy12aWRlby1ub3V2ZWF1CnhzZXJ2ZXIteG9yZy12aWRlby1pbnRlbAp4c2VydmVyLXhvcmctdmlkZW8tYXRpCndwYXN1cHBsaWNhbnQKYmx1ZXoK" | base64 -d > config/package-lists/07-firmware.list.chroot
           echo "Firmware & driver packages added for wide hardware support."
           echo "[branding] Build complete."
       - name: Set up Calamares installer
