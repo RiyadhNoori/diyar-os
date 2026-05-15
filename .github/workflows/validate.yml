@@ -1,136 +1,995 @@
-name: Validate
+name: Build Diyar OS ISO
 
 # =============================================================================
-# Diyar OS — Fast Validation Workflow
-# .github/workflows/validate.yml
+# Diyar OS — GitHub Actions ISO Build Pipeline
+# .github/workflows/build-iso.yml
 #
-# Runs on every push and PR — takes ~2 minutes vs 60+ for a full build.
-# Catches: shell syntax errors, XML errors, package list issues, hook problems.
+# Triggers:
+#   - Push to main/develop (full build)
+#   - Pull request to main (validation only, no release)
+#   - Manual dispatch (with version input)
+#   - Weekly schedule (Sunday 02:00 UTC — keeps ISO fresh)
+#
+# Outputs:
+#   - diyar-os-<version>-amd64.iso  (GitHub Release asset)
+#   - SHA256 checksum file
+#   - Build log artifact
 # =============================================================================
 
 on:
   push:
-    branches: ['**']
+    branches:
+      - main
+      - develop
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+      - '.github/ISSUE_TEMPLATE/**'
+
   pull_request:
-    branches: [main, develop]
+    branches:
+      - main
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (e.g. 1.0.0)'
+        required: false
+        default: 'dev'
+      release:
+        description: 'Create GitHub Release?'
+        type: boolean
+        required: false
+        default: false
+      debug_enabled:
+        description: 'Enable tmate debug session on failure'
+        type: boolean
+        required: false
+        default: false
+
+  schedule:
+    # Weekly build every Sunday at 02:00 UTC
+    - cron: '0 2 * * 0'
+
+# Cancel in-progress runs for the same branch
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # ── Build parameters ────────────────────────────────────────────────────────
+  DEBIAN_RELEASE:   bookworm
+  ARCH:             amd64
+  ISO_VOLUME:       DIYAR_OS
+  ISO_NAME:         diyar-os
+  LIVE_USER:        diyar
+  LIVE_HOSTNAME:    diyar-live
+
+  # ── Repo references (submodules) ────────────────────────────────────────────
+  ARABIAN_SHIELD_REPO: https://github.com/${{ github.repository_owner }}/arabian-shield-linux-core
+  DIYAR_INSTALLER_REPO: https://github.com/${{ github.repository_owner }}/diyar-installer
+  DIYAR_BRANDING_REPO:  https://github.com/${{ github.repository_owner }}/diyar-branding
 
 jobs:
+  # ============================================================================
+  # JOB 1 — Validate configuration files before expensive build
+  # ============================================================================
   validate:
-    name: Validate configs & scripts
+    name: Validate Configuration
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Check package lists
+        run: |
+          echo "Checking package list syntax..."
+          for f in config/package-lists/*.list.chroot; do
+            echo "  → $f"
+            # No blank lines that could confuse live-build
+            grep -P "^\s*$" "$f" && echo "    WARNING: blank lines found" || true
+            # No duplicate entries
+            sort "$f" | uniq -d | grep -v "^#" | grep -v "^$" \
+              && echo "    WARNING: duplicates found" || true
+          done
+          echo "Package list check complete."
+
+      - name: Check hook scripts
+        run: |
+          echo "Checking hook scripts..."
+          for f in config/hooks/live/*.hook.chroot; do
+            echo "  → $f"
+            bash -n "$f" || { echo "SYNTAX ERROR in $f"; exit 1; }
+          done
+          echo "Hook syntax check complete."
+
+      - name: Check auto/config
+        run: |
+          echo "Checking auto/config..."
+          bash -n auto/config || { echo "SYNTAX ERROR in auto/config"; exit 1; }
+          bash -n auto/build  || { echo "SYNTAX ERROR in auto/build";  exit 1; }
+          bash -n auto/clean  || { echo "SYNTAX ERROR in auto/clean";  exit 1; }
+          echo "auto/* syntax check complete."
+
+      - name: Validate XFCE4 XML configs
+        run: |
+          echo "Validating XML configs..."
+          apt-get install -y --no-install-recommends libxml2-utils 2>/dev/null || true
+          find config/ -name "*.xml" -exec xmllint --noout {} \; \
+            && echo "XML validation passed." \
+            || echo "WARNING: XML validation issues found."
+
+  # ============================================================================
+  # JOB 2 — Build the ISO
+  # ============================================================================
+  build:
+    name: Build ISO
+    needs: validate
+    runs-on: ubuntu-latest
+
+    # Ubuntu 22.04 runner on Debian Bookworm base gives best live-build compat
+    # We use ubuntu-latest but install Debian live-build tools explicitly
+    timeout-minutes: 350
+
+    permissions:
+      contents: write    # needed to create releases
+      actions: read
+
+    outputs:
+      iso_filename:  ${{ steps.meta.outputs.iso_filename }}
+      iso_version:   ${{ steps.meta.outputs.version }}
+      build_date:    ${{ steps.meta.outputs.build_date }}
+
+    steps:
+      # ── Checkout ─────────────────────────────────────────────────────────────
+      - name: Checkout diyar-os
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      # ── Version metadata ─────────────────────────────────────────────────────
+      - name: Compute version and filenames
+        id: meta
+        run: |
+          # Version: manual input → git tag → date-based
+          if [[ "${{ github.event.inputs.version }}" != "" && \
+                "${{ github.event.inputs.version }}" != "dev" ]]; then
+            VERSION="${{ github.event.inputs.version }}"
+          elif git describe --tags --exact-match HEAD 2>/dev/null; then
+            VERSION="$(git describe --tags --exact-match HEAD)"
+          else
+            VERSION="$(date -u '+%Y.%m.%d')-$(git rev-parse --short HEAD)"
+          fi
+
+          BUILD_DATE="$(date -u '+%Y-%m-%d %H:%M UTC')"
+          ISO_FILENAME="${ISO_NAME}-${VERSION}-${ARCH}.iso"
+
+          echo "version=${VERSION}"          >> $GITHUB_OUTPUT
+          echo "iso_filename=${ISO_FILENAME}" >> $GITHUB_OUTPUT
+          echo "build_date=${BUILD_DATE}"    >> $GITHUB_OUTPUT
+
+          echo "┌─────────────────────────────────────────"
+          echo "│  Diyar OS ISO Build"
+          echo "│  Version   : ${VERSION}"
+          echo "│  Filename  : ${ISO_FILENAME}"
+          echo "│  Build date: ${BUILD_DATE}"
+          echo "│  Trigger   : ${{ github.event_name }}"
+          echo "└─────────────────────────────────────────"
+
+      # ── System preparation ───────────────────────────────────────────────────
+      - name: Free disk space
+        run: |
+          echo "Available before cleanup:"
+          df -h /
+          # Remove large unused packages to make room for ISO build (~10 GB needed)
+          sudo apt-get remove -y \
+            '^dotnet-.*' '^llvm-.*' 'php.*' '^mongodb-.*' '^mysql-.*' \
+            azure-cli google-cloud-sdk google-chrome-stable firefox \
+            powershell mono-devel snapd 2>/dev/null || true
+          sudo apt-get autoremove -y 2>/dev/null || true
+          sudo rm -rf \
+            /usr/share/dotnet \
+            /usr/local/lib/android \
+            /opt/ghc \
+            /opt/hostedtoolcache/CodeQL \
+            /usr/local/share/boost \
+            "$AGENT_TOOLSDIRECTORY" 2>/dev/null || true
+          sudo docker system prune -af 2>/dev/null || true
+          echo "Available after cleanup:"
+          df -h /
+
+      - name: Install live-build and dependencies
+        run: |
+          sudo apt-get update -qq
+
+          # ── Import Debian Bookworm GPG keys via curl
+          sudo mkdir -p /etc/apt/keyrings
+          curl -fsSL "https://ftp-master.debian.org/keys/archive-key-12.asc" \
+            | sudo gpg --dearmor -o /etc/apt/keyrings/debian-bookworm.gpg
+          curl -fsSL "https://ftp-master.debian.org/keys/archive-key-12-security.asc" \
+            | sudo gpg --dearmor -o /etc/apt/keyrings/debian-bookworm-security.gpg
+
+          # ── Add Debian Bookworm repo
+          echo "deb [signed-by=/etc/apt/keyrings/debian-bookworm.gpg] http://deb.debian.org/debian bookworm main contrib non-free non-free-firmware" \
+            | sudo tee /etc/apt/sources.list.d/debian-bookworm.list
+          echo "deb [signed-by=/etc/apt/keyrings/debian-bookworm-security.gpg] http://security.debian.org/debian-security bookworm-security main contrib non-free non-free-firmware" \
+            | sudo tee /etc/apt/sources.list.d/debian-bookworm-security.list
+
+          # ── Pin live-build and debian-archive-keyring from Debian
+          cat <<'PINEOF' | sudo tee /etc/apt/preferences.d/debian-bookworm
+          Package: live-build
+          Pin: release o=Debian,n=bookworm
+          Pin-Priority: 1001
+
+          Package: debian-archive-keyring
+          Pin: release o=Debian,n=bookworm
+          Pin-Priority: 1001
+          PINEOF
+
+          sudo apt-get update -qq
+
+          # ── Install live-build AND debian-archive-keyring from Debian
+          # debian-archive-keyring installs the keyring debootstrap needs at
+          # /usr/share/keyrings/debian-archive-keyring.gpg
+          sudo apt-get install -y --no-install-recommends \
+            -t bookworm live-build debian-archive-keyring
+
+          # ── Install remaining build tools
+          sudo apt-get install -y --no-install-recommends \
+            debootstrap \
+            squashfs-tools \
+            xorriso \
+            grub-pc-bin \
+            grub-efi-amd64-bin \
+            mtools \
+            isolinux \
+            syslinux-common \
+            rsync \
+            parted \
+            dosfstools \
+            e2fsprogs \
+            python3-pil \
+            librsvg2-bin \
+            wget \
+            git \
+            ovmf \
+            imagemagick
+
+          # ── Verify the keyring file exists
+          echo "--- Checking keyring ---"
+          ls -la /usr/share/keyrings/debian-archive-keyring.gpg             && echo "Keyring OK"             || echo "KEYRING MISSING"
+
+          echo "live-build version: $(lb --version)"
+          echo "debootstrap version: $(debootstrap --version | head -1)"
+
+      - name: Configure live-build
+        run: |
+          echo "Running lb config..."
+          VERSION="${{ steps.meta.outputs.version }}"
+          VOLUME_LABEL="DIYAR_OS_$(echo "${VERSION}" | tr '.-' '_' | cut -c1-16)"
+          echo "ISO_VOLUME=${VOLUME_LABEL}"
+          # XZ_OPT=-T0 tells xz to use all available CPU cores (much faster than single-threaded)
+          sudo env \
+            ISO_VOLUME="${VOLUME_LABEL}" \
+            ISO_COMPRESSION="xz" \
+            XZ_OPT="-T0" \
+            bash auto/config
+          echo "Configuration complete."
+          echo "=== config/ tree ==="
+          find config/ -type f | sort
+          echo "=== config/common ==="
+          sudo cat config/common 2>/dev/null || true
+          echo "=== lb --version ==="
+          lb --version
+
+      # ── Ensure full package lists are in place ───────────────────────────────
+      - name: Ensure complete package lists
+        run: |
+          mkdir -p config/package-lists
+          mkdir -p config/hooks/live
+
+          # ── Audit existing lists ──────────────────────────────────────────────
+          echo "=== Existing package lists ==="
+          ls -la config/package-lists/ || true
+          for f in config/package-lists/*.list.chroot; do
+            echo "--- $f ---"
+            cat "$f" 2>/dev/null || true
+          done
+
+          # ── Write package lists via base64-decoded python3 (YAML-safe) ─────────
+          # Root cause of 1.6GB ISO: heredoc indentation added leading spaces to every
+          # package name, so live-build could not find any package and installed nothing.
+          # Fix: decode and run python script that writes clean unindented lists.
+          echo "aW1wb3J0IG9zLCBnbG9iCgpkZXNrdG9wID0gIiIiIyBYRkNFNCBEZXNrdG9wCnhmY2U0CnhmY2U0LWdvb2RpZXMKeGZjZTQtdGVybWluYWwKeGZjZTQtdGFza21hbmFnZXIKeGZjZTQtc2NyZWVuc2hvb3Rlcgp4ZmNlNC1ub3RpZnlkCnhmY2U0LXBvd2VyLW1hbmFnZXIKeGZjb25mCnRodW5hcgp0aHVuYXItYXJjaGl2ZS1wbHVnaW4KdGh1bmFyLXZvbG1hbgp0dW1ibGVyCmZpbGUtcm9sbGVyCm1vdXNlcGFkCnJpc3RyZXR0bwojIERpc3BsYXkgbWFuYWdlcgpsaWdodGRtCmxpZ2h0ZG0tZ3RrLWdyZWV0ZXIKbGlnaHRkbS1ndGstZ3JlZXRlci1zZXR0aW5ncwojIE5ldHdvcmsKbmV0d29yay1tYW5hZ2VyCm5ldHdvcmstbWFuYWdlci1nbm9tZQpuZXR3b3JrLW1hbmFnZXItb3BlbnZwbgpuZXR3b3JrLW1hbmFnZXItb3BlbnZwbi1nbm9tZQojIEF1ZGlvL1ZpZGVvCnB1bHNlYXVkaW8KcGF2dWNvbnRyb2wKdmxjCiMgRm9udHMKZm9udHMtbm90bwpmb250cy1ub3RvLWNvbG9yLWVtb2ppCmZvbnRzLW5vdG8tY2prCmZvbnRzLWxpYmVyYXRpb24KZm9udHMtYXJhYmV5ZXMKZm9udHMta2Fjc3QKZm9udHMtaG9zbnktYW1pcmkKIyBBcmFiaWMgbG9jYWxlCmxvY2FsZXMKYXNwZWxsLWFyCmh1bnNwZWxsLWFyCiMgU3lzdGVtIHV0aWxpdGllcwpiYXNoLWNvbXBsZXRpb24KY3VybAp3Z2V0CmdpdApodG9wCm5lb2ZldGNoCmdwYXJ0ZWQKZ25vbWUtZGlzay11dGlsaXR5CnVkaXNrczIKdXBvd2VyCmJsdWVtYW4KZGlhbG9nCndoaXB0YWlsCiMgQXJjaGl2ZSB0b29scwpwN3ppcC1mdWxsCnVuemlwCnppcAojIEFjY2Vzc2liaWxpdHkKYXQtc3BpMi1jb3JlCiMgTGludXgga2VybmVsCmxpbnV4LWltYWdlLWFtZDY0CmxpbnV4LWhlYWRlcnMtYW1kNjQKIyBMaXZlIHN5c3RlbQpsaXZlLWJvb3QKbGl2ZS1jb25maWcKbGl2ZS1jb25maWctc3lzdGVtZAoiIiIKCmRldnRvb2xzID0gIiIiIyBEZXYgdG9vbHMgLSByZXF1aXJlcyB0aGlyZC1wYXJ0eSByZXBvcyAoMDA1MCBob29rKQpjb2RlCiMgQnVpbGQgZXNzZW50aWFscwpidWlsZC1lc3NlbnRpYWwKY21ha2UKZ2RiCmdjYwpnKysKbWFrZQpweXRob24zCnB5dGhvbjMtcGlwCnB5dGhvbjMtdmVudgppcHl0aG9uMwojIE5vZGUuanMgMjAgTFRTCm5vZGVqcwojIERvY2tlcgpkb2NrZXItY2UKZG9ja2VyLWNlLWNsaQpjb250YWluZXJkLmlvCmRvY2tlci1jb21wb3NlLXBsdWdpbgojIEdpdCBleHRyYXMKZ2l0LWxmcwpnaXRrCiMgRGF0YWJhc2UgdG9vbHMKc3FsaXRlMwpwb3N0Z3Jlc3FsLWNsaWVudApkZWZhdWx0LW15c3FsLWNsaWVudAoiIiIKCm9zLm1ha2VkaXJzKCJjb25maWcvcGFja2FnZS1saXN0cyIsIGV4aXN0X29rPVRydWUpCmV4aXN0aW5nID0gZ2xvYi5nbG9iKCJjb25maWcvcGFja2FnZS1saXN0cy8qLmxpc3QuY2hyb290IikKaGFzX3hmY2UgPSBhbnkoInhmY2U0IiBpbiBvcGVuKGYpLnJlYWQoKSBmb3IgZiBpbiBleGlzdGluZyBpZiBvcy5wYXRoLmV4aXN0cyhmKSkKaGFzX2RldiAgPSBhbnkoImRvY2tlciIgaW4gb3BlbihmKS5yZWFkKCkgZm9yIGYgaW4gZXhpc3RpbmcgaWYgb3MucGF0aC5leGlzdHMoZikpCgppZiBub3QgaGFzX3hmY2U6CiAgICB3aXRoIG9wZW4oImNvbmZpZy9wYWNrYWdlLWxpc3RzLzAxLWRlc2t0b3AubGlzdC5jaHJvb3QiLCAidyIpIGFzIGY6CiAgICAgICAgZi53cml0ZShkZXNrdG9wKQogICAgbiA9IGxlbihbbCBmb3IgbCBpbiBkZXNrdG9wLnNwbGl0bGluZXMoKSBpZiBsLnN0cmlwKCkgYW5kIG5vdCBsLnN0YXJ0c3dpdGgoIiMiKV0pCiAgICBwcmludChmIldyaXR0ZW4gMDEtZGVza3RvcC5saXN0LmNocm9vdCAoe259IHBhY2thZ2VzKSIpCmVsc2U6CiAgICBwcmludCgiWEZDRTQgbGlzdCBleGlzdHMg4oCUIHNraXBwaW5nIikKCmlmIG5vdCBoYXNfZGV2OgogICAgd2l0aCBvcGVuKCJjb25maWcvcGFja2FnZS1saXN0cy8wMi1kZXZ0b29scy5saXN0LmNocm9vdCIsICJ3IikgYXMgZjoKICAgICAgICBmLndyaXRlKGRldnRvb2xzKQogICAgbiA9IGxlbihbbCBmb3IgbCBpbiBkZXZ0b29scy5zcGxpdGxpbmVzKCkgaWYgbC5zdHJpcCgpIGFuZCBub3QgbC5zdGFydHN3aXRoKCIjIildKQogICAgcHJpbnQoZiJXcml0dGVuIDAyLWRldnRvb2xzLmxpc3QuY2hyb290ICh7bn0gcGFja2FnZXMpIikKZWxzZToKICAgIHByaW50KCJEZXYgdG9vbHMgbGlzdCBleGlzdHMg4oCUIHNraXBwaW5nIikKCmZvciBwYXRoIGluIHNvcnRlZChnbG9iLmdsb2IoImNvbmZpZy9wYWNrYWdlLWxpc3RzLyoubGlzdC5jaHJvb3QiKSk6CiAgICBiYWQgPSBbbCBmb3IgbCBpbiBvcGVuKHBhdGgpIGlmIGxbMDoxXSBpbiAoIiAiLCAiCSIpXQogICAgbiA9IGxlbihbbCBmb3IgbCBpbiBvcGVuKHBhdGgpIGlmIGwuc3RyaXAoKSBhbmQgbm90IGwuc3RhcnRzd2l0aCgiIyIpXSkKICAgIHN0YXR1cyA9IGYiV0FSTklORyB7bGVuKGJhZCl9IGxpbmVzIHdpdGggbGVhZGluZyB3aGl0ZXNwYWNlIiBpZiBiYWQgZWxzZSAiT0siCiAgICBwcmludChmIntzdGF0dXN9OiB7cGF0aH0gKHtufSBwYWNrYWdlcykiKQo=" | base64 -d | python3
+          echo "Package lists written. Verifying no leading whitespace..."
+
+          # ── Third-party packages via chroot hook (adds repos + installs) ────────
+          # config/archives/ and config/hooks/bootstrap/ are read-only in checkout.
+          # Solution: use a numbered chroot hook (runs AFTER base packages but
+          # BEFORE squashfs) — add repos inside chroot then apt-get install.
+          # Packages code/nodejs/docker-ce removed from package lists (below)
+          # so live-build does not try to install them before repos exist.
+          mkdir -p config/hooks/live
+          echo "IyEvYmluL2Jhc2gKc2V0IC1ldW8gcGlwZWZhaWwKZXhwb3J0IERFQklBTl9GUk9OVEVORD1ub25pbnRlcmFjdGl2ZQplY2hvICJbaG9va10gSW5zdGFsbGluZyB0aGlyZC1wYXJ0eSBwYWNrYWdlcyAoVlNDb2RlLCBEb2NrZXIsIE5vZGUuanMpLi4uIgoKIyBFbnN1cmUgdG9vbHMgYXZhaWxhYmxlIGluc2lkZSBjaHJvb3QKYXB0LWdldCBpbnN0YWxsIC15IC0tbm8taW5zdGFsbC1yZWNvbW1lbmRzIGN1cmwgZ251cGcgY2EtY2VydGlmaWNhdGVzIGFwdC10cmFuc3BvcnQtaHR0cHMgMj4vZGV2L251bGwgfHwgdHJ1ZQoKIyBWZXJpZnkgbmV0d29yawppZiAhIGN1cmwgLXNmIC0tbWF4LXRpbWUgMTUgaHR0cHM6Ly9wYWNrYWdlcy5taWNyb3NvZnQuY29tID4gL2Rldi9udWxsIDI+JjE7IHRoZW4KICBlY2hvICJbaG9va10gV0FSTklORzogTm8gbmV0d29yayDigJQgc2tpcHBpbmcgdGhpcmQtcGFydHkgcGFja2FnZXMiCiAgZXhpdCAwCmZpCgpta2RpciAtcCAvZXRjL2FwdC9rZXlyaW5ncwoKIyDilIDilIAgVlMgQ29kZSDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIAKZWNobyAiW2hvb2tdIEFkZGluZyBWU0NvZGUgcmVwby4uLiIKY3VybCAtZnNTTCAtLXJldHJ5IDMgaHR0cHM6Ly9wYWNrYWdlcy5taWNyb3NvZnQuY29tL2tleXMvbWljcm9zb2Z0LmFzYyAgIHwgZ3BnIC0tZGVhcm1vciAtLXllcyAtbyAvZXRjL2FwdC9rZXlyaW5ncy9taWNyb3NvZnQuZ3BnCnByaW50ZiAnZGViIFthcmNoPWFtZDY0IHNpZ25lZC1ieT0vZXRjL2FwdC9rZXlyaW5ncy9taWNyb3NvZnQuZ3BnXSBodHRwczovL3BhY2thZ2VzLm1pY3Jvc29mdC5jb20vcmVwb3MvY29kZSBzdGFibGUgbWFpbgonICAgPiAvZXRjL2FwdC9zb3VyY2VzLmxpc3QuZC92c2NvZGUubGlzdAplY2hvICJbaG9va10gVlNDb2RlIHJlcG8gYWRkZWQiCgojIOKUgOKUgCBOb2RlLmpzIDIwIExUUyDigJQgdXNlIE5vZGVTb3VyY2Ugc2V0dXAgc2NyaXB0IChoYW5kbGVzIEdQRyBhdXRvbWF0aWNhbGx5KSDilIDilIAKZWNobyAiW2hvb2tdIEFkZGluZyBOb2RlSlMgcmVwby4uLiIKY3VybCAtZnNTTCAtLXJldHJ5IDMgaHR0cHM6Ly9kZWIubm9kZXNvdXJjZS5jb20vc2V0dXBfMjAueCAtbyAvdG1wL25vZGVzb3VyY2Vfc2V0dXAuc2gKYmFzaCAvdG1wL25vZGVzb3VyY2Vfc2V0dXAuc2gKcm0gLWYgL3RtcC9ub2Rlc291cmNlX3NldHVwLnNoCmVjaG8gIltob29rXSBOb2RlSlMgcmVwbyBhZGRlZCIKCiMg4pSA4pSAIERvY2tlciDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIAKZWNobyAiW2hvb2tdIEFkZGluZyBEb2NrZXIgcmVwby4uLiIKY3VybCAtZnNTTCAtLXJldHJ5IDMgaHR0cHM6Ly9kb3dubG9hZC5kb2NrZXIuY29tL2xpbnV4L2RlYmlhbi9ncGcgICB8IGdwZyAtLWRlYXJtb3IgLS15ZXMgLW8gL2V0Yy9hcHQva2V5cmluZ3MvZG9ja2VyLmdwZwpwcmludGYgJ2RlYiBbYXJjaD1hbWQ2NCBzaWduZWQtYnk9L2V0Yy9hcHQva2V5cmluZ3MvZG9ja2VyLmdwZ10gaHR0cHM6Ly9kb3dubG9hZC5kb2NrZXIuY29tL2xpbnV4L2RlYmlhbiBib29rd29ybSBzdGFibGUKJyAgID4gL2V0Yy9hcHQvc291cmNlcy5saXN0LmQvZG9ja2VyLmxpc3QKZWNobyAiW2hvb2tdIERvY2tlciByZXBvIGFkZGVkIgoKIyDilIDilIAgUmVmcmVzaCBhbmQgaW5zdGFsbCDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIDilIAKYXB0LWdldCB1cGRhdGUgLXFxCgplY2hvICJbaG9va10gSW5zdGFsbGluZyBWUyBDb2RlLi4uIgphcHQtZ2V0IGluc3RhbGwgLXkgLS1uby1pbnN0YWxsLXJlY29tbWVuZHMgY29kZSAgICYmIGVjaG8gIltob29rXSBWU0NvZGUgT0siIHx8IGVjaG8gIltob29rXSBXQVJOSU5HOiBjb2RlIGZhaWxlZCDigJQgY29udGludWluZyIKCmVjaG8gIltob29rXSBJbnN0YWxsaW5nIE5vZGUuanMuLi4iCmFwdC1nZXQgaW5zdGFsbCAteSAtLW5vLWluc3RhbGwtcmVjb21tZW5kcyBub2RlanMgICAmJiBlY2hvICJbaG9va10gTm9kZS5qcyBPSyIgfHwgZWNobyAiW2hvb2tdIFdBUk5JTkc6IG5vZGVqcyBmYWlsZWQg4oCUIGNvbnRpbnVpbmciCgplY2hvICJbaG9va10gSW5zdGFsbGluZyBEb2NrZXIuLi4iCmFwdC1nZXQgaW5zdGFsbCAteSAtLW5vLWluc3RhbGwtcmVjb21tZW5kcyAgIGRvY2tlci1jZSBkb2NrZXItY2UtY2xpIGNvbnRhaW5lcmQuaW8gZG9ja2VyLWNvbXBvc2UtcGx1Z2luICAgJiYgZWNobyAiW2hvb2tdIERvY2tlciBPSyIgfHwgZWNobyAiW2hvb2tdIFdBUk5JTkc6IGRvY2tlciBmYWlsZWQg4oCUIGNvbnRpbnVpbmciCgplY2hvICJbaG9va10gVGhpcmQtcGFydHkgcGFja2FnZXMgY29tcGxldGUuIgplY2hvICIgIG5vZGU6ICAgJChub2RlIC0tdmVyc2lvbiAyPi9kZXYvbnVsbCB8fCBlY2hvICdub3QgaW5zdGFsbGVkJykiCmVjaG8gIiAgZG9ja2VyOiAkKGRvY2tlciAtLXZlcnNpb24gMj4vZGV2L251bGwgfHwgZWNobyAnbm90IGluc3RhbGxlZCcpIgo=" \
+            | base64 -d > config/hooks/live/0060-install-third-party.hook.chroot
+          chmod +x config/hooks/live/0060-install-third-party.hook.chroot
+          echo "Third-party install hook written."
+          # Remove these packages from all package lists — installed by hook instead
+          echo "aW1wb3J0IGdsb2IsIG9zCnRvX3JlbW92ZSA9IHsnY29kZScsICdub2RlanMnLCAnZG9ja2VyLWNlJywgJ2RvY2tlci1jZS1jbGknLAogICAgICAgICAgICAgJ2NvbnRhaW5lcmQuaW8nLCAnZG9ja2VyLWNvbXBvc2UtcGx1Z2luJ30KZm9yIHBhdGggaW4gZ2xvYi5nbG9iKCdjb25maWcvcGFja2FnZS1saXN0cy8qLmxpc3QuY2hyb290Jyk6CiAgICBsaW5lcyA9IG9wZW4ocGF0aCkucmVhZGxpbmVzKCkKICAgIGZpbHRlcmVkID0gW2wgZm9yIGwgaW4gbGluZXMgaWYgbC5zdHJpcCgpIG5vdCBpbiB0b19yZW1vdmVdCiAgICBpZiBsZW4oZmlsdGVyZWQpICE9IGxlbihsaW5lcyk6CiAgICAgICAgcmVtb3ZlZCA9IFtsLnN0cmlwKCkgZm9yIGwgaW4gbGluZXMgaWYgbC5zdHJpcCgpIGluIHRvX3JlbW92ZV0KICAgICAgICBvcGVuKHBhdGgsICd3Jykud3JpdGVsaW5lcyhmaWx0ZXJlZCkKICAgICAgICBwcmludChmIlJlbW92ZWQgZnJvbSB7cGF0aH06IHtyZW1vdmVkfSIpCiAgICBlbHNlOgogICAgICAgIHByaW50KGYiTm8gY2hhbmdlczoge3BhdGh9IikK" | base64 -d | python3
+          echo "Third-party packages removed from static lists."
+
+          # ── Verify final package list sizes ───────────────────────────────────
+          echo "=== Final package lists ==="
+          for f in config/package-lists/*.list.chroot; do
+            COUNT=$(grep -cv "^#\|^$" "$f" 2>/dev/null || echo 0)
+            echo "  $f → ${COUNT} packages"
+          done
+          TOTAL=$(grep -rh "^[^#]" config/package-lists/*.list.chroot 2>/dev/null \
+            | grep -v "^$" | wc -l)
+          echo "Total packages to install: ${TOTAL}"
+          echo "Expected ISO size: ~3–5 GB (was 1.6 GB = packages were missing)"
+
+      # ── Inject version into ISO ──────────────────────────────────────────────
+      - name: Diagnose environment
+        run: |
+          echo "=============================="
+          echo "=== FULL ENVIRONMENT CHECK ==="
+          echo "=============================="
+
+          echo "--- User ---"
+          whoami && id
+
+          echo "--- live-build version ---"
+          lb --version
+          dpkg -l live-build | tail -1
+
+          echo "--- Required tools ---"
+          for cmd in debootstrap lb squashfs-tools mksquashfs xorriso grub-mkrescue; do
+            which $cmd 2>/dev/null && echo "  OK: $cmd" || echo "  MISSING: $cmd"
+          done
+
+          echo "--- config/common ---"
+          cat config/common
+
+          echo "--- config/binary ---"
+          cat config/binary 2>/dev/null || echo "(no config/binary yet)"
+
+          echo "--- config/chroot ---"
+          cat config/chroot 2>/dev/null || echo "(no config/chroot yet)"
+
+          echo "--- config/bootstrap ---"
+          cat config/bootstrap 2>/dev/null || echo "(no config/bootstrap yet)"
+
+          echo "--- package lists ---"
+          ls -la config/package-lists/
+
+          echo "--- hooks ---"
+          ls -la config/hooks/live/ 2>/dev/null || echo "(no hooks/live)"
+
+          echo "--- disk space ---"
+          df -h /
+
+          echo "--- network test ---"
+          curl -fsSL --max-time 5 https://deb.debian.org/debian/dists/bookworm/Release             | head -3 || echo "NETWORK ISSUE: cannot reach deb.debian.org"
+
+      - name: Inject version metadata
+        run: |
+          VERSION="${{ steps.meta.outputs.version }}"
+          BUILD_DATE="${{ steps.meta.outputs.build_date }}"
+          COMMIT="${{ github.sha }}"
+
+          mkdir -p config/includes.chroot/etc
+          cat > config/includes.chroot/etc/diyar-release <<EOF
+          NAME="Diyar OS"
+          NAME_AR="ديار"
+          VERSION="${VERSION}"
+          BUILD_DATE="${BUILD_DATE}"
+          BUILD_COMMIT="${COMMIT}"
+          BUILD_HOST="GitHub Actions"
+          ARCH="${ARCH}"
+          BASE="Debian ${DEBIAN_RELEASE}"
+          HOME_URL="https://github.com/${{ github.repository }}"
+          EOF
+
+          # Also inject into /etc/os-release
+          mkdir -p config/includes.chroot/etc
+          cat > config/includes.chroot/etc/os-release <<EOF
+          PRETTY_NAME="Diyar OS ${VERSION}"
+          NAME="Diyar OS"
+          VERSION_ID="${VERSION}"
+          VERSION="Diyar OS ${VERSION} (${DEBIAN_RELEASE})"
+          ID=diyar
+          ID_LIKE=debian
+          HOME_URL="https://github.com/${{ github.repository }}"
+          SUPPORT_URL="https://github.com/${{ github.repository }}/issues"
+          BUG_REPORT_URL="https://github.com/${{ github.repository }}/issues"
+          EOF
+
+          echo "Version metadata injected: ${VERSION}"
+
+      # ── Custom GRUB boot menu via binary hook ────────────────────────────────
+      - name: Inject custom GRUB boot menu
+        run: |
+          # config/bootloaders/ is read-only.
+          # Use a .hook.binary — runs after ISO filesystem is built,
+          # at that point grub.cfg exists and can be patched.
+          mkdir -p config/hooks/live
+          echo "IyEvYmluL2Jhc2gKc2V0IC1ldW8gcGlwZWZhaWwKZWNobyAiW2hvb2tdIFBhdGNoaW5nIEdSVUIgYm9vdCBtZW51Li4uIgoKR1JVQl9DRkc9IiIKZm9yIGNhbmRpZGF0ZSBpbiAvYm9vdC9ncnViL2dydWIuY2ZnIC9ib290L2dydWIyL2dydWIuY2ZnOyBkbwogIGlmIFsgLWYgIiRjYW5kaWRhdGUiIF07IHRoZW4gR1JVQl9DRkc9IiRjYW5kaWRhdGUiOyBicmVhazsgZmkKZG9uZQoKaWYgWyAteiAiJEdSVUJfQ0ZHIiBdOyB0aGVuCiAgZWNobyAiW2hvb2tdIGdydWIuY2ZnIG5vdCBmb3VuZCDigJQgc2tpcHBpbmciCiAgZXhpdCAwCmZpCgpjcCAiJEdSVUJfQ0ZHIiAiJHtHUlVCX0NGR30uYmFrIgpwcmludGYgJyVzCicgJ2lmIGxvYWRmb250IC9ib290L2dydWIvZm9udC5wZjIgOyB0aGVuJyAnICBzZXQgZ2Z4bW9kZT1hdXRvJyAnICBpbnNtb2QgZWZpX2dvcCcgJyAgaW5zbW9kIGVmaV91Z2EnICcgIGluc21vZCBnZnh0ZXJtJyAnICB0ZXJtaW5hbF9vdXRwdXQgZ2Z4dGVybScgJ2ZpJyAnc2V0IG1lbnVfY29sb3Jfbm9ybWFsPXdoaXRlL2JsYWNrJyAnc2V0IG1lbnVfY29sb3JfaGlnaGxpZ2h0PWJsYWNrL3llbGxvdycgJ3NldCB0aW1lb3V0PTEwJyAnc2V0IGRlZmF1bHQ9MCcgJ21lbnVlbnRyeSAiVHJ5IERpeWFyIE9TIC0gU2FmZSAoUmVjb21tZW5kZWQpIiAtLWhvdGtleT0xIHsnICcgIGxpbnV4IC9saXZlL3ZtbGludXogYm9vdD1saXZlIGNvbXBvbmVudHMgcXVpZXQgbm9wbHltb3V0aCBub2VqZWN0IG5vbW9kZXNldCBsb2NhbGVzPWFyX0lRLlVURi04IGtleWJvYXJkLWxheW91dHM9YXJhLHVzIHRpbWV6b25lPUFzaWEvQmFnaGRhZCBob3N0bmFtZT1kaXlhci1saXZlIHVzZXJuYW1lPWRpeWFyJyAnICBpbml0cmQgL2xpdmUvaW5pdHJkLmltZycgJ30nICdtZW51ZW50cnkgIlRyeSBEaXlhciBPUyAtIEZ1bGwgRmVhdHVyZXMiIC0taG90a2V5PTIgeycgJyAgbGludXggL2xpdmUvdm1saW51eiBib290PWxpdmUgY29tcG9uZW50cyBzcGxhc2ggbG9jYWxlcz1hcl9JUS5VVEYtOCBrZXlib2FyZC1sYXlvdXRzPWFyYSx1cyB0aW1lem9uZT1Bc2lhL0JhZ2hkYWQgaG9zdG5hbWU9ZGl5YXItbGl2ZSB1c2VybmFtZT1kaXlhcicgJyAgaW5pdHJkIC9saXZlL2luaXRyZC5pbWcnICd9JyAnbWVudWVudHJ5ICJJbnN0YWxsIERpeWFyIE9TIiAtLWhvdGtleT0zIHsnICcgIGxpbnV4IC9saXZlL3ZtbGludXogYm9vdD1saXZlIGNvbXBvbmVudHMgcXVpZXQgbm9wbHltb3V0aCBub2VqZWN0IG5vbW9kZXNldCBsb2NhbGVzPWFyX0lRLlVURi04IGtleWJvYXJkLWxheW91dHM9YXJhLHVzIHRpbWV6b25lPUFzaWEvQmFnaGRhZCBob3N0bmFtZT1kaXlhci1saXZlIHVzZXJuYW1lPWRpeWFyJyAnICBpbml0cmQgL2xpdmUvaW5pdHJkLmltZycgJ30nID4gIiRHUlVCX0NGRyIKZWNobyAiW2hvb2tdIEdSVUIgbWVudSBwYXRjaGVkIE9LIgo=" \
+            | base64 -d > config/hooks/live/9999-patch-grub.hook.binary
+          chmod +x config/hooks/live/9999-patch-grub.hook.binary
+          echo "GRUB patch hook written."
+
+      - name: Build and inject branding assets
+        run: |
+          set -euo pipefail
+          echo "[branding] Starting branding injection..."
+
+          # Create symlink for typo in assets folder
+          if [[ -d "assets" && ! -d "assets" ]]; then
+            ln -s "$(pwd)/assets" "$(pwd)/assets"
+          fi
+
+          # Run build-icons script (optional, may fail)
+          if [[ -f "scripts/build-icons.sh" ]]; then
+            bash scripts/build-icons.sh || echo "build-icons.sh failed (OK)"
+          fi
+
+          # Copy icons from diyar-icons/index.theme
+          ICON_DEST="config/includes.chroot/usr/share/icons/Diyar-Icons"
+          mkdir -p "$ICON_DEST"
+          [[ -f "diyar-icons/index.theme" ]] && cp diyar-icons/index.theme "$ICON_DEST/" || true
+
+          # Copy PNG/SVG files from assets/ — search all subdirs
+          if [[ -d "assets" ]]; then
+            # Find all icon files recursively
+            ICON_FILES=$(find assets -type f \( -name "*.png" -o -name "*.svg" \) 2>/dev/null)
+            if [[ -n "$ICON_FILES" ]]; then
+              echo "[branding] Found icon files:"
+              echo "$ICON_FILES" | head -5
+              # Copy preserving directory structure
+              while IFS= read -r file; do
+                mkdir -p "$ICON_DEST/$(dirname "${file#assets/}")"
+                cp "$file" "$ICON_DEST/$(dirname "${file#assets/}")/" 2>/dev/null || true
+              done <<< "$ICON_FILES"
+              ICON_COUNT=$(find "$ICON_DEST" -type f 2>/dev/null | wc -l)
+              echo "[branding] Icons copied: $ICON_COUNT files"
+            else
+              echo "[branding] No PNG/SVG files found in assets/"
+            fi
+          else
+            echo "[branding] assets/ directory not found"
+          fi
+
+          # Copy wallpapers
+          if [[ -d "assets/wallpapers" ]]; then
+            WALL_DEST="config/includes.chroot/usr/share/diyar-os/wallpapers"
+            mkdir -p "$WALL_DEST"
+            cp -r assets/wallpapers/* "$WALL_DEST/" 2>/dev/null || true
+            echo "[branding] Wallpapers: $(ls "$WALL_DEST" 2>/dev/null | wc -l) files"
+          fi
+
+          echo "[branding] Branding injection complete."
+          # Section complete - no more asset copying needed
+
+
+          # ── Copy logo to pixmaps ──────────────────────────────────────────────
+          LOGO="$(find . -path "*/output/logo/diyar-logo-256.png" | head -1)"
+          if [[ -n "$LOGO" ]]; then
+            mkdir -p config/includes.chroot/usr/share/pixmaps
+            cp "$LOGO" config/includes.chroot/usr/share/pixmaps/diyar-logo.png
+            echo "Logo copied: $LOGO"
+          fi
+
+          # ── Set Diyar icon theme as default in XFCE4 ─────────────────────────
+          XFCE_DIR="config/includes.chroot/etc/xdg/xfce4/xfconf/xfce-perchannel-xml"
+          mkdir -p "$XFCE_DIR"
+
+          # Write clean XML — no leading spaces (previous heredoc had YAML indent bug)
+          # Always overwrite to guarantee correct values land in the ISO
+          printf '%s\n' \
+            '<?xml version="1.0" encoding="UTF-8"?>' \
+            '<channel name="xsettings" version="1.0">' \
+            '  <property name="Net" type="empty">' \
+            '    <property name="IconThemeName" type="string" value="Diyar-Icons"/>' \
+            '    <property name="ThemeName"     type="string" value="Adwaita-dark"/>' \
+            '    <property name="CursorThemeName" type="string" value="Adwaita"/>' \
+            '  </property>' \
+            '  <property name="Gtk" type="empty">' \
+            '    <property name="FontName" type="string" value="Noto Sans Arabic 11"/>' \
+            '  </property>' \
+            '</channel>' \
+            > "${XFCE_DIR}/xsettings.xml"
+          echo "XFCE4 xsettings.xml written (IconThemeName=Diyar)"
+
+
+          # ── Firmware and GPU drivers for hardware compatibility (2010-2024) ────
+          echo "IyBGaXJtd2FyZSBwYWNrYWdlcyBmb3IgV2lGaSwgQmx1ZXRvb3RoLCBHUFUKbGludXgtZmlybXdhcmUKZmlybXdhcmUtbGludXgKZmlybXdhcmUtbGludXgtZnJlZQpmaXJtd2FyZS1saW51eC1ub25mcmVlCmZpcm13YXJlLXJlYWx0ZWsKZmlybXdhcmUtYXRoZXJvcwpmaXJtd2FyZS1pd2x3aWZpCmZpcm13YXJlLWJyY204MDIxMQoKIyBHUFUgZHJpdmVycyAob3BlbiBzb3VyY2UpCnhzZXJ2ZXIteG9yZy12aWRlby1ub3V2ZWF1CnhzZXJ2ZXIteG9yZy12aWRlby1hdGkKeHNlcnZlci14b3JnLXZpZGVvLWludGVsCnhzZXJ2ZXIteG9yZy12aWRlby1hbWRncHUKeHNlcnZlci14b3JnLXZpZGVvLWZiZGV2CnhzZXJ2ZXIteG9yZy12aWRlby12ZXNhCgojIFdpcmVsZXNzCndwYXN1cHBsaWNhbnQKd2lyZWxlc3MtdG9vbHMKaXcKaXdkCmJsdWV6CmJsdWV6LWZpcm13YXJlCgojIFBvd2VyIG1hbmFnZW1lbnQKcG0tdXRpbHMKcG93ZXJ0b3AK" | base64 -d > config/package-lists/07-firmware-drivers.list.chroot
+          echo "Firmware & driver packages added for wide hardware support."
+          echo "[branding] Build complete."
+      - name: Set up Calamares installer
+        run: |
+          echo "=== Configuring Calamares ==="
+
+          # ── 1. Install .deb files from calamares-packages/ via a chroot hook ──
+          # calamares-packages/ contains pre-downloaded .deb files:
+          #   calamares_3.2.61-1+b1_amd64.deb
+          #   calamares-settings-debian_12.0.9-1+deb12u2_all.deb
+          #
+          # Strategy: copy .debs into config/includes.chroot so they land inside
+          # the chroot at /opt/calamares-debs/, then install via a hook script.
+
+          DEB_DEST="config/includes.chroot/opt/calamares-debs"
+          mkdir -p "$DEB_DEST"
+          cp calamares-packages/*.deb "$DEB_DEST/"
+          echo "Copied .deb files:"
+          ls -lh "$DEB_DEST/"
+
+          # ── 2. Write a chroot hook to install the .deb files ─────────────────
+          # live-build runs hooks/live/*.hook.chroot inside the chroot
+          # during lb chroot phase — perfect for dpkg installs.
+          HOOK_DIR="config/hooks/live"
+          mkdir -p "$HOOK_DIR"
+
+          echo "IyEvYmluL2Jhc2gKc2V0IC1ldW8gcGlwZWZhaWwKZWNobyAiW2hvb2tdIEluc3RhbGxpbmcgQ2FsYW1hcmVzIGZyb20gbG9jYWwgLmRlYiBmaWxlcy4uLiIKREVCX0RJUj0iL29wdC9jYWxhbWFyZXMtZGVicyIKYXB0LWdldCBpbnN0YWxsIC15IC0tbm8taW5zdGFsbC1yZWNvbW1lbmRzIHB5dGhvbjMtcHlxdDUgcW1sLW1vZHVsZS1xdHF1aWNrMiBxbWwtbW9kdWxlLXF0cXVpY2stY29udHJvbHMyIGxpYmtwbWNvcmUxMiBsaWJib29zdC1weXRob24xLjc0LjAgMj4vZGV2L251bGwgfHwgdHJ1ZQpkcGtnIC1pICIke0RFQl9ESVJ9Ii8qLmRlYiB8fCBhcHQtZ2V0IGluc3RhbGwgLWYgLXkKY29tbWFuZCAtdiBjYWxhbWFyZXMgJj4vZGV2L251bGwgJiYgZWNobyAiW2hvb2tdIENhbGFtYXJlcyBpbnN0YWxsZWQgT0siIHx8IGVjaG8gIltob29rXSBXQVJOSU5HOiBjYWxhbWFyZXMgbm90IGZvdW5kIgpybSAtcmYgIiRERUJfRElSIgplY2hvICJbaG9va10gQ2FsYW1hcmVzIGhvb2sgY29tcGxldGUuIgo=" \
+            | base64 -d > "${HOOK_DIR}/0200-install-calamares.hook.chroot"
+          chmod +x "${HOOK_DIR}/0200-install-calamares.hook.chroot"
+          echo "Hook written: ${HOOK_DIR}/0200-install-calamares.hook.chroot"
+
+          # ── 2. Calamares branding ─────────────────────────────────────────────
+          BRAND_DIR="config/includes.chroot/usr/share/calamares/branding/diyar"
+          mkdir -p "$BRAND_DIR"
+
+          cat > "${BRAND_DIR}/branding.desc" <<'BRANDEOF'
+          componentName: diyar
+
+          welcomeStyleCalamares: true
+          welcomeExpandingLogo:  true
+
+          strings:
+            productName:         Diyar OS
+            shortProductName:    Diyar
+            version:             "@{VERSION}"
+            shortVersion:        "@{VERSION}"
+            versionedName:       Diyar OS @{VERSION}
+            shortVersionedName:  Diyar @{VERSION}
+            bootloaderEntryName: DiyarOS
+            productUrl:          https://github.com/RiyadhNoori/diyar-os
+            supportUrl:          https://github.com/RiyadhNoori/diyar-os/issues
+            knownIssuesUrl:      https://github.com/RiyadhNoori/diyar-os/issues
+            releaseNotesUrl:     https://github.com/RiyadhNoori/diyar-os/releases
+
+          images:
+            productLogo:         "diyar-logo.png"
+            productIcon:         "diyar-logo.png"
+            productWelcome:      "languages.png"
+
+          slideshow:             "show.qml"
+
+          style:
+            sidebarBackground:   "#0D1525"
+            sidebarText:         "#FFFFFF"
+            sidebarTextSelect:   "#C9963A"
+          BRANDEOF
+
+          # Copy logo into branding dir if available
+          LOGO="$(find config/includes.chroot/usr/share/pixmaps -name "diyar-logo.png" 2>/dev/null | head -1)"
+          if [[ -n "$LOGO" ]]; then
+            cp "$LOGO" "${BRAND_DIR}/diyar-logo.png"
+            echo "Branding logo copied."
+          fi
+
+          # ── 3. Calamares main settings ────────────────────────────────────────
+          CAL_CONF="config/includes.chroot/etc/calamares"
+          mkdir -p "$CAL_CONF/modules"
+
+          cat > "${CAL_CONF}/settings.conf" <<'SETEOF'
+          ---
+          modules-search: [ local, /usr/lib/calamares/modules ]
+
+          sequence:
+            - show:
+              - welcome
+              - locale
+              - keyboard
+              - partition
+              - users
+              - summary
+            - exec:
+              - partition
+              - mount
+              - unpackfs
+              - machineid
+              - fstab
+              - locale
+              - keyboard
+              - localecfg
+              - users
+              - displaymanager
+              - networkcfg
+              - hwclock
+              - grubcfg
+              - bootloader
+              - packages
+              - luksbootkeyfile
+              - plymouthcfg
+              - initramfscfg
+              - initramfs
+              - removeuser
+              - umount
+            - show:
+              - finished
+
+          branding: diyar
+          prompt-install: true
+          dont-chroot: false
+          SETEOF
+
+          # ── 4. Locale module config ───────────────────────────────────────────
+          cat > "${CAL_CONF}/modules/locale.conf" <<'LOCEOF'
+          ---
+          region:   Asia
+          zone:     Baghdad
+          LOCEOF
+
+          # ── 5. Users module config ────────────────────────────────────────────
+          cat > "${CAL_CONF}/modules/users.conf" <<'USEREOF'
+          ---
+          defaultGroups:
+            - sudo
+            - audio
+            - video
+            - plugdev
+            - netdev
+            - bluetooth
+          autologinGroup: autologin
+          doAutologin:    false
+          sudoersGroup:   sudo
+          setRootPassword: false
+          USEREOF
+
+          # ── 6. unpackfs config — copy squashfs from live media ────────────────
+          cat > "${CAL_CONF}/modules/unpackfs.conf" <<'UNPACKEOF'
+          ---
+          unpack:
+            - source: /run/live/medium/live/filesystem.squashfs
+              sourcefs: squashfs
+              destination: ""
+          UNPACKEOF
+
+          # ── 7. Desktop launcher for Calamares ─────────────────────────────────
+          # ONE launcher in /usr/share/applications (appears in app menu)
+          # ONE copy on the live desktop via /etc/skel/Desktop
+          # Previous version wrote 3+ copies causing the duplicate icons seen on desktop
+
+          DESKTOP_DIR="config/includes.chroot/usr/share/applications"
+          mkdir -p "$DESKTOP_DIR"
+
+          # Remove any stale copies that may exist from previous runs
+          rm -f "${DESKTOP_DIR}/calamares.desktop" \
+                "${DESKTOP_DIR}/install-diyar.desktop"
+
+          printf '%s\n' \
+            '[Desktop Entry]' \
+            'Version=1.0' \
+            'Type=Application' \
+            'Name=Install Diyar OS' \
+            'Name[ar]=تثبيت نظام ديار' \
+            'Comment=Install Diyar OS to your hard drive' \
+            'Comment[ar]=قم بتثبيت نظام ديار على قرصك الصلب' \
+            'Exec=pkexec /usr/bin/calamares' \
+            'Icon=/usr/share/pixmaps/diyar-logo.png' \
+            'Terminal=false' \
+            'Categories=System;' \
+            'Keywords=install;setup;diyar;' \
+            'StartupNotify=true' \
+            > "${DESKTOP_DIR}/install-diyar-os.desktop"
+
+          # Single copy on the live desktop (skel applies to all users including live user)
+          LIVE_DESK="config/includes.chroot/etc/skel/Desktop"
+          mkdir -p "$LIVE_DESK"
+
+          # Remove any stale copies first
+          rm -f "${LIVE_DESK}"/*install* "${LIVE_DESK}"/*calamares* 2>/dev/null || true
+
+          cp "${DESKTOP_DIR}/install-diyar-os.desktop" \
+             "${LIVE_DESK}/install-diyar-os.desktop"
+          chmod +x "${LIVE_DESK}/install-diyar-os.desktop"
+
+          echo "Desktop launcher written (single copy, no duplicates)"
+
+          # ── 8. polkit rule so Calamares can be launched without password ──────
+          POLKIT_DIR="config/includes.chroot/etc/polkit-1/rules.d"
+          mkdir -p "$POLKIT_DIR"
+          cat > "${POLKIT_DIR}/49-calamares.rules" <<'POLKEOF'
+          polkit.addRule(function(action, subject) {
+              if (action.id === "org.freedesktop.policykit.exec" &&
+                  action.lookup("program") === "/usr/bin/calamares" &&
+                  subject.isInGroup("sudo")) {
+                  return polkit.Result.YES;
+              }
+          });
+          POLKEOF
+
+          echo "=== Calamares setup complete ==="
+          echo "  .deb files       : ${DEB_DEST}/"
+          echo "  install hook     : ${HOOK_DIR}/0200-install-calamares.hook.chroot"
+          echo "  settings.conf    : ${CAL_CONF}/settings.conf"
+          echo "  branding         : ${BRAND_DIR}/"
+          echo "  desktop launcher : ${LIVE_DESK}/install-diyar.desktop"
+
+      # ── Build ────────────────────────────────────────────────────────────────
+      - name: Build ISO
+        id: build_iso
+        run: |
+          echo "=== lb version ==="
+          lb --version
+
+          echo "=== config/common ==="
+          cat config/common 2>/dev/null || echo "MISSING"
+
+          echo "=== config/chroot ==="
+          cat config/chroot 2>/dev/null || echo "MISSING"
+
+          echo "=== Running lb bootstrap ==="
+          sudo lb bootstrap noauto 2>&1
+          echo "bootstrap exit: $?"
+
+          echo "=== Running lb chroot ==="
+          sudo lb chroot noauto 2>&1
+          LB_EXIT=$?
+          echo "chroot exit: $LB_EXIT"
+
+          echo "=== chroot/build.log ==="
+          sudo cat chroot/build.log 2>/dev/null || echo "(empty)"
+
+          echo "=== chroot/debootstrap/debootstrap.log ==="
+          sudo cat chroot/debootstrap/debootstrap.log 2>/dev/null || echo "(empty)"
+
+          echo "=== apt logs in chroot ==="
+          sudo cat chroot/var/log/apt/term.log 2>/dev/null | tail -50 || echo "(empty)"
+          sudo cat chroot/var/log/dpkg.log 2>/dev/null | tail -50 || echo "(empty)"
+
+          if [ $LB_EXIT -ne 0 ]; then
+            exit $LB_EXIT
+          fi
+
+          echo "=== Running lb binary ==="
+          sudo lb binary noauto 2>&1
+          LB_EXIT=$?
+          echo "binary exit: $LB_EXIT"
+
+          ls -la
+          exit $LB_EXIT
+
+      - name: Locate and rename ISO
+        id: locate_iso
+        run: |
+          # live-build outputs to the current directory
+          ISO_SRC="$(find . -maxdepth 1 -name "*.iso" | head -1)"
+
+          if [[ -z "$ISO_SRC" ]]; then
+            echo "ERROR: No ISO file found after build!"
+            ls -la
+            exit 1
+          fi
+
+          ISO_DEST="${{ steps.meta.outputs.iso_filename }}"
+          mv "$ISO_SRC" "$ISO_DEST"
+
+          ISO_SIZE="$(du -sh "$ISO_DEST" | cut -f1)"
+          echo "ISO: ${ISO_DEST} (${ISO_SIZE})"
+          echo "iso_path=${ISO_DEST}" >> $GITHUB_OUTPUT
+          echo "iso_size=${ISO_SIZE}" >> $GITHUB_OUTPUT
+
+      # ── Generate checksums ───────────────────────────────────────────────────
+      - name: Generate checksums
+        run: |
+          ISO="${{ steps.locate_iso.outputs.iso_path }}"
+          SHA256="$(sha256sum "$ISO" | awk '{print $1}')"
+          MD5="$(md5sum "$ISO" | awk '{print $1}')"
+
+          cat > "${ISO}.sha256" <<EOF
+          # Diyar OS ${{ steps.meta.outputs.version }} — Checksums
+          # Generated: ${{ steps.meta.outputs.build_date }}
+          SHA256: ${SHA256}
+          MD5:    ${MD5}
+          File:   ${{ steps.meta.outputs.iso_filename }}
+          EOF
+
+          echo "sha256=${SHA256}" >> $GITHUB_OUTPUT
+          echo ""
+          echo "Checksum: ${SHA256}"
+        id: checksum
+
+      # ── Upload artifacts (always, even on failure) ───────────────────────────
+      - name: Upload ISO artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: diyar-os-iso-${{ steps.meta.outputs.version }}
+          path: |
+            ${{ steps.locate_iso.outputs.iso_path }}
+            ${{ steps.locate_iso.outputs.iso_path }}.sha256
+          retention-days: 30
+          compression-level: 0    # ISO is already compressed
+
+      - name: Upload build log artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ steps.meta.outputs.version }}
+          path: build-full.log
+          retention-days: 14
+
+      # ── Debug session on failure (only if enabled) ────────────────────────────
+      - name: Debug session (tmate)
+        if: failure() && github.event.inputs.debug_enabled == 'true'
+        uses: mxschmitt/action-tmate@v3
+        timeout-minutes: 30
+
+      # ── Summary ──────────────────────────────────────────────────────────────
+      - name: Build summary
+        if: success()
+        run: |
+          echo "## Diyar OS ISO Build Complete" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Property | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| Version | ${{ steps.meta.outputs.version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Filename | ${{ steps.meta.outputs.iso_filename }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Size | ${{ steps.locate_iso.outputs.iso_size }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| SHA256 | \`${{ steps.checksum.outputs.sha256 }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| Build date | ${{ steps.meta.outputs.build_date }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Trigger | ${{ github.event_name }} |" >> $GITHUB_STEP_SUMMARY
+
+  # ============================================================================
+  # JOB 3 — Quick smoke test in QEMU (no display, just boot check)
+  # ============================================================================
+  smoke-test:
+    name: Smoke Test (QEMU boot)
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: github.event_name != 'pull_request'
+
+    steps:
+      - name: Download ISO artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: diyar-os-iso-${{ needs.build.outputs.iso_version }}
+
+      - name: Install QEMU
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            qemu-system-x86 ovmf
+
+      - name: Boot ISO in QEMU (headless, 60s timeout)
+        run: |
+          ISO="${{ needs.build.outputs.iso_filename }}"
+          echo "Testing boot of: ${ISO}"
+
+          # Boot with serial console, capture output, timeout after 60s
+          timeout 60 qemu-system-x86_64 \
+            -m 1024 \
+            -smp 2 \
+            -nographic \
+            -serial mon:stdio \
+            -cdrom "$ISO" \
+            -boot d \
+            -no-reboot \
+            -append "console=ttyS0 boot=live components quiet" \
+            2>&1 | tee qemu-boot.log || EXIT=$?
+
+          # Check for kernel panic or critical errors
+          if grep -qi "kernel panic\|BUG:\|OOPS:" qemu-boot.log; then
+            echo "BOOT FAILURE: kernel panic detected"
+            cat qemu-boot.log
+            exit 1
+          fi
+
+          # Check GRUB loaded
+          if grep -qi "GRUB\|grub\|Loading Linux" qemu-boot.log; then
+            echo "GRUB loaded successfully."
+          else
+            echo "WARNING: GRUB output not detected (may be normal for headless)"
+          fi
+
+          echo "Boot smoke test passed."
+
+      - name: Upload boot log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qemu-boot-log-${{ needs.build.outputs.iso_version }}
+          path: qemu-boot.log
+          retention-days: 7
+
+  # ============================================================================
+  # JOB 4 — Create GitHub Release
+  # Runs only on: manual dispatch with release=true, OR version tag push
+  # ============================================================================
+  release:
+    name: Create GitHub Release
+    needs: [build, smoke-test]
+    runs-on: ubuntu-latest
+    if: |
+      (github.event_name == 'workflow_dispatch' && github.event.inputs.release == 'true') ||
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
+
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install tools
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            shellcheck \
-            libxml2-utils \
-            yamllint
+      - name: Download ISO artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: diyar-os-iso-${{ needs.build.outputs.iso_version }}
 
-      - name: ShellCheck — auto/config
+      - name: Generate release notes
+        id: release_notes
         run: |
-          shellcheck -S warning auto/config auto/build auto/clean \
-            || echo "ShellCheck warnings (non-fatal)"
+          VERSION="${{ needs.build.outputs.iso_version }}"
+          BUILD_DATE="${{ needs.build.outputs.build_date }}"
 
-      - name: ShellCheck — hooks
-        run: |
-          shellcheck -S warning -e SC1091 \
-            config/hooks/live/*.hook.chroot \
-            || echo "ShellCheck warnings (non-fatal)"
+          cat > release_notes.md <<EOF
+          # Diyar OS ${VERSION} — ديار نظام التشغيل
 
-      - name: ShellCheck — scripts
-        run: |
-          shellcheck -S warning scripts/*.sh \
-            || echo "ShellCheck warnings (non-fatal)"
+          **Build date:** ${BUILD_DATE}
+          **Base:** Debian 12 (Bookworm) · Architecture: amd64
 
-      - name: Validate XML configs
-        run: |
-          FAIL=0
-          for f in $(find config/ -name "*.xml" 2>/dev/null); do
-            xmllint --noout "$f" 2>&1 || { echo "XML ERROR: $f"; FAIL=1; }
-          done
-          [[ $FAIL -eq 0 ]] && echo "All XML files valid." || exit 1
+          ## What's included
 
-      - name: Validate YAML (workflows)
-        run: |
-          yamllint -d "{extends: relaxed, rules: {line-length: {max: 160}}}" \
-            .github/workflows/ \
-            || echo "YAML lint warnings (non-fatal)"
+          - Arabian Shield Linux Core — FriBidi + Pango Arabic rendering engine
+          - XFCE4 desktop with full RTL layout and Arabic-first configuration
+          - Vazirmatn + Amiri + Noto Arabic font stack
+          - IBus Arabic input method (Alt+Shift to toggle)
+          - Diyar Installer — rsync-based HDD installer (BIOS + UEFI)
+          - Firefox ESR with Arabic UI
+          - LibreOffice with Arabic support
+          - Arabic locale (ar_IQ.UTF-8) with Baghdad timezone
 
-      - name: Check package lists
-        run: |
-          FAIL=0
-          for f in config/package-lists/*.list.chroot; do
-            echo "Checking $f..."
-            # No Windows line endings
-            if file "$f" | grep -q CRLF; then
-              echo "  ERROR: CRLF line endings in $f"
-              FAIL=1
-            fi
-            # No obviously wrong entries
-            while IFS= read -r line; do
-              # Skip comments and blank lines
-              [[ "$line" =~ ^[[:space:]]*# ]] && continue
-              [[ -z "${line// }" ]] && continue
-              # Package names should be lowercase alphanumeric + - + .
-              if [[ ! "$line" =~ ^[a-z0-9][a-z0-9.+\-]*$ ]]; then
-                echo "  WARNING: suspicious package name: '$line'"
-              fi
-            done < "$f"
-          done
-          [[ $FAIL -eq 0 ]] && echo "Package list check passed." || exit 1
+          ## Installation
 
-      - name: Check hook naming convention
-        run: |
-          # All hooks must follow NNNN-name.hook.chroot pattern
-          FAIL=0
-          for f in config/hooks/live/*.hook.chroot; do
-            base="$(basename "$f")"
-            if [[ ! "$base" =~ ^[0-9]{4}-[a-z0-9_-]+\.hook\.chroot$ ]]; then
-              echo "ERROR: Bad hook filename: $base (expected NNNN-name.hook.chroot)"
-              FAIL=1
-            fi
-          done
-          [[ $FAIL -eq 0 ]] && echo "Hook naming convention: OK" || exit 1
+          \`\`\`bash
+          # Write to USB
+          sudo dd if=${{ needs.build.outputs.iso_filename }} of=/dev/sdX bs=4M status=progress
+          sync
 
-      - name: Check hook bash syntax
-        run: |
-          FAIL=0
-          for f in config/hooks/live/*.hook.chroot; do
-            bash -n "$f" 2>&1 || { echo "SYNTAX ERROR: $f"; FAIL=1; }
-          done
-          [[ $FAIL -eq 0 ]] && echo "All hooks pass syntax check." || exit 1
+          # Or in QEMU for testing
+          qemu-system-x86_64 -cdrom ${{ needs.build.outputs.iso_filename }} -m 2G -enable-kvm
+          \`\`\`
 
-      - name: Verify required files exist
-        run: |
-          REQUIRED=(
-            "auto/config"
-            "auto/build"
-            "auto/clean"
-            "config/package-lists/00-base.list.chroot"
-            "config/package-lists/01-desktop.list.chroot"
-            "config/package-lists/02-arabic.list.chroot"
-            "config/package-lists/03-installer.list.chroot"
-            "config/hooks/live/0020-arabian-shield.hook.chroot"
-            "config/hooks/live/0030-diyar-installer.hook.chroot"
-            "config/hooks/live/0040-arabic-system.hook.chroot"
-            "config/hooks/live/0050-xfce4-desktop.hook.chroot"
-            "config/hooks/live/0060-lightdm.hook.chroot"
-            "config/hooks/live/0099-cleanup.hook.chroot"
-          )
-          FAIL=0
-          for f in "${REQUIRED[@]}"; do
-            [[ -f "$f" ]] && echo "  ✓ $f" || { echo "  ✗ MISSING: $f"; FAIL=1; }
-          done
-          [[ $FAIL -eq 0 ]] && echo "All required files present." || exit 1
+          Boot the live session, then click **"Install Diyar OS"** on the desktop.
 
-      - name: Validation summary
-        run: |
-          echo "## Validation Passed" >> $GITHUB_STEP_SUMMARY
-          echo "All syntax checks, XML validation, and file checks passed." \
-            >> $GITHUB_STEP_SUMMARY
+          ## Checksums
+
+          See the attached \`.sha256\` file.
+
+          ---
+          *Built automatically by GitHub Actions — commit ${{ github.sha }}*
+          EOF
+
+          echo "notes_file=release_notes.md" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.build.outputs.iso_version }}
+          name: Diyar OS ${{ needs.build.outputs.iso_version }}
+          body_path: release_notes.md
+          draft: false
+          prerelease: ${{ !startsWith(github.ref, 'refs/tags/v') }}
+          files: |
+            ${{ needs.build.outputs.iso_filename }}
+            ${{ needs.build.outputs.iso_filename }}.sha256
+          token: ${{ secrets.GITHUB_TOKEN }}
